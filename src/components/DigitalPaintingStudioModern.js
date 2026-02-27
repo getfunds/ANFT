@@ -404,7 +404,12 @@ export default function DigitalPaintingStudioModern({ onMintNFT }) {
   }, [newBg, initCanvas, doFit]);
 
   useEffect(() => {
+    const isTyping = () => {
+        const el = document.activeElement;
+        return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+      };
     const down = (e) => {
+      if (isTyping()) return;
       if (e.key === ' ') {
         e.preventDefault();
         if (!spaceRef.current && activeTool !== 'hand') {
@@ -434,6 +439,7 @@ export default function DigitalPaintingStudioModern({ onMintNFT }) {
       }
     };
     const up = (e) => {
+      if (isTyping()) return;
       if (e.key === ' ') {
         spaceRef.current = false;
         if (tempTool === 'hand' && prevToolRef.current) {
