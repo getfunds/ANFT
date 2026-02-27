@@ -28,9 +28,7 @@ ANFT (Authentic NFT) is an NFT platform on Solana where artists create, prove, a
 
 The platform gives creators two ways to make art — text-to-image generation using open-source AI models, and a full digital painting studio with professional brushes, layers, and textures. Both paths produce the same thing: a real Solana SPL token with an immutable on-chain attestation that permanently records who made the artwork, when, and how.
 
-Every artist on ANFT gets a Decentralized Identity (DID) stored on-chain. Every artwork is fingerprinted with SHA-256 content hashes. Every mint produces a Solana Attestation Service (SAS) record that anyone can verify independently. The marketplace is a real Anchor program — listings, purchases, offers, and cancellations all happen on-chain through PDAs and escrow accounts.
-
-This is not a mockup or a simulation. The smart contracts are deployed. The attestations are on-chain. The marketplace escrows real SOL.
+Every artist on ANFT gets a Decentralized Identity (DID) stored on-chain. Every artwork is fingerprinted with SHA-256 content hashes. Every mint produces a Solana Attestation Service (SAS) record that anyone can verify independently.
 
 ---
 
@@ -48,7 +46,7 @@ This means:
 - **Artists cannot prove authorship.** A creator who makes original work has the same on-chain footprint as someone who right-clicks and re-uploads stolen art.
 - **Provenance is an afterthought.** Most metadata is stored off-chain with no integrity checks. If the hosting service changes the file, no one would know.
 
-The result is a trust gap between creators and collectors that weakens the entire NFT ecosystem.
+The result is a trust gap between creators and collectors that weakens the entire NFT art ecosystem.
 
 ---
 
@@ -96,7 +94,7 @@ Every mint produces a real Solana Attestation Service attestation. The `ANFT_MIN
 | `nftMintAddress` | SPL token mint address |
 | `royaltyBps` | Royalty in basis points |
 
-The attestation is signed by the ANFT authority keypair (held server-side, never exposed to the client) and written to a deterministic PDA derived from the NFT mint address. The attestation expires after 10 years — effectively permanent.
+The attestation is signed by the ANFT authority keypair (held server-side, never exposed to the client) and written to a deterministic PDA derived from the NFT mint address. 
 
 **Why it matters:** The attestation is an independent, on-chain record that exists separately from the NFT token itself. Even if every off-chain service disappears, the attestation account on Solana still contains the creator DID, the content hashes, and the IPFS CIDs. Anyone with a Solana RPC endpoint can verify it.
 
@@ -373,7 +371,7 @@ If any step fails, the on-chain transaction reverts. The SAS attestation is crea
 ### Project Structure
 
 ```
-ANFThedera/
+ANFT/
 ├── programs/
 │   ├── anft_did/src/lib.rs              # DID Anchor program
 │   └── anft_marketplace/src/lib.rs      # Marketplace Anchor program
@@ -440,8 +438,8 @@ ANFThedera/
 ### Setup
 
 ```bash
-git clone https://github.com/getfunds/ANFThedera.git
-cd ANFThedera
+git clone https://github.com/getfunds/ANFT.git
+cd ANFT
 npm install
 cp .env.example .env.local   # Fill in all required values
 npm run dev                   # Starts on http://localhost:3000
