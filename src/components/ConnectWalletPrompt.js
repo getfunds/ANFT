@@ -1,13 +1,13 @@
 'use client';
 
-import { useWallet } from '../context/WalletContext';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import styles from './ConnectWalletPrompt.module.css';
 
 export default function ConnectWalletPrompt({ 
   title = "Connect Your Wallet",
-  description = "Please connect your Hedera wallet to continue."
+  description = "Please connect your Solana wallet to continue."
 }) {
-  const { setShowWalletModal } = useWallet();
+  const { setVisible } = useWalletModal();
 
   return (
     <div className={styles.container}>
@@ -22,7 +22,7 @@ export default function ConnectWalletPrompt({
         <p className={styles.description}>{description}</p>
         
         <button 
-          onClick={() => setShowWalletModal(true)}
+          onClick={() => setVisible(true)}
           className={styles.connectButton}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -35,7 +35,7 @@ export default function ConnectWalletPrompt({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>We support Blade Wallet on Hedera</span>
+          <span>We support Phantom and other Solana wallets</span>
         </div>
       </div>
     </div>

@@ -1,119 +1,86 @@
 /**
- * API Endpoint: Verify Attestation from HCS
+ * API Route: Verify SAS Attestation
  * 
- * Retrieves and verifies attestation from Hedera Consensus Service
- * Uses HCS Mirror Node API to query messages
+ * Verifies a REAL on-chain Solana Attestation Service attestation by address.
+ * Fetches from blockchain and checks subject, schema, and issuer match ANFT expectations.
+ * 
+ * GET /api/attestation/verify?address=<attestation_address>
  */
+
+import { createSolanaRpc, address as toAddress } from '@solana/kit';
+import { fetchAttestation, fetchSchema, deserializeAttestationData } from 'sas-lib';
+
+const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const SAS_SCHEMA_ADDRESS = process.env.NEXT_PUBLIC_ANFT_SAS_SCHEMA_ID;
+const AUTHORITY_PUBKEY = process.env.NEXT_PUBLIC_ANFT_AUTHORITY_PUBKEY;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  
+
   try {
-    const { topicId, sequenceNumber } = req.query;
+    const { address: attestAddr } = req.query;
+
+    if (!attestAddr) {
+      return res.status(400).json({ error: 'Attestation address is required', verified: false });
+    }
+
+    console.log('🔍 Verifying on-chain SAS attestation:', attestAddr);
+
+    const rpc = createSolanaRpc(SOLANA_RPC_URL);
+    const attestationAddress = toAddress(attestAddr);
+
+    // Fetch the attestation from blockchain
+    const attestation = await fetchAttestation(rpc, attestationAddress);
     
-    // Validate inputs
-    if (!topicId || !sequenceNumber) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: topicId, sequenceNumber' 
+    if (!attestation) {
+      return res.status(404).json({
+        verified: false,
+        error: 'Attestation not found on-chain',
       });
     }
+
+    // Verify schema matches
+    const schemaMatches = attestation.data.schema === SAS_SCHEMA_ADDRESS;
     
-    console.log('🔍 Verifying attestation...');
-    console.log('📋 Topic ID:', topicId);
-    console.log('🔢 Sequence Number:', sequenceNumber);
-    
-    // Get network
-    const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
-    
-    // Mirror node API URL
-    const mirrorNodeUrl = network === 'mainnet'
-      ? 'https://mainnet-public.mirrornode.hedera.com'
-      : 'https://testnet.mirrornode.hedera.com';
-    
-    // Query topic messages
-    const apiUrl = `${mirrorNodeUrl}/api/v1/topics/${topicId}/messages/${sequenceNumber}`;
-    
-    console.log('🌐 Querying mirror node:', apiUrl);
-    
-    const response = await fetch(apiUrl);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        return res.status(404).json({ 
-          error: 'Attestation not found',
-          topicId,
-          sequenceNumber
-        });
-      }
-      
-      throw new Error(`Mirror node query failed: ${response.statusText}`);
-    }
-    
-    const mirrorData = await response.json();
-    
-    // Decode message
-    const messageBase64 = mirrorData.message;
-    const messageJson = Buffer.from(messageBase64, 'base64').toString('utf-8');
-    const attestation = JSON.parse(messageJson);
-    
-    console.log('✅ Attestation retrieved and decoded');
-    console.log('👤 Creator DID:', attestation.payload?.creatorDID);
-    console.log('🔐 Content Hash:', attestation.payload?.contentHash?.substring(0, 16) + '...');
-    
-    // Verify hash integrity
-    const crypto = await import('crypto');
-    const canonical = JSON.stringify(
-      attestation.payload, 
-      Object.keys(attestation.payload).sort(), 
-      0
-    );
-    const computedHash = crypto.createHash('sha256').update(canonical, 'utf8').digest('hex');
-    
-    const hashValid = computedHash === attestation.payloadHash;
-    
-    if (!hashValid) {
-      console.warn('⚠️ Hash mismatch detected!');
-      console.warn('   Expected:', attestation.payloadHash);
-      console.warn('   Computed:', computedHash);
-    } else {
-      console.log('✅ Hash integrity verified');
-    }
-    
-    // Build response
-    const result = {
-      success: true,
-      verified: hashValid,
-      
-      // Attestation data
-      attestation: attestation,
-      
-      // HCS metadata
-      topicId: topicId,
-      sequenceNumber: sequenceNumber,
-      consensusTimestamp: mirrorData.consensus_timestamp,
-      
-      // Verification
-      hashValid: hashValid,
-      computedHash: computedHash,
-      
-      // Explorer link
-      explorerUrl: `https://hashscan.io/${network}/topic/${topicId}/message/${sequenceNumber}`,
-      
-      // Network
-      network: network
-    };
-    
-    return res.status(200).json(result);
-    
+    // Verify signer is the authority
+    const signerMatches = attestation.data.signer === AUTHORITY_PUBKEY;
+
+    // Check if attestation is expired
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const isExpired = Number(attestation.data.expiry) < currentTimestamp;
+
+    const verified = schemaMatches && signerMatches && !isExpired;
+
+    // Fetch schema and deserialize data
+    const schemaAddr = toAddress(SAS_SCHEMA_ADDRESS);
+    const schema = await fetchSchema(rpc, schemaAddr);
+    const attestationData = deserializeAttestationData(schema.data, attestation.data.data);
+
+    console.log(`✅ Attestation verification complete: ${verified ? 'VALID' : 'INVALID'}`);
+
+    return res.status(200).json({
+      verified,
+      attestation: {
+        address: attestAddr,
+        schema: attestation.data.schema,
+        signer: attestation.data.signer,
+        credential: attestation.data.credential,
+        expiry: Number(attestation.data.expiry),
+        data: attestationData,
+      },
+      checks: {
+        schemaMatches,
+        signerMatches,
+        isExpired,
+      },
+    });
   } catch (error) {
-    console.error('❌ Attestation verification error:', error);
-    
+    console.error('❌ Error verifying attestation:', error);
     return res.status(500).json({
-      error: error.message || 'Failed to verify attestation',
-      details: error.toString()
+      error: `Verification failed: ${error.message}`,
+      verified: false,
     });
   }
 }
-

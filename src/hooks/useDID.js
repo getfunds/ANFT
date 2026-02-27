@@ -2,16 +2,27 @@
  * React Hook for Decentralized Identity (DID) Management
  * 
  * This hook provides:
- * - DID status checking
- * - DID registration flow
- * - Integration with Blade Wallet
+ * - DID status checking via Solana on-chain PDA
+ * - DID registration flow (username-based)
  * - Pre-mint DID verification
+ * 
+ * DID registration happens atomically inside the mint transaction.
+ * This hook only checks state and manages the modal flow.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { checkExistingDID, getOrCreateDID } from '../utils/hederaDID';
+import { PublicKey } from '@solana/web3.js';
+import {
+  checkExistingDID,
+  deriveDidProfilePDA,
+  deriveWalletLookupPDA,
+  getProgram,
+  ANFT_PROGRAM_ID,
+  validateUsername,
+} from '../utils/solanaDID';
+import { createAnchorProvider } from '../utils/solanaWallet';
 
-export function useDID(accountId) {
+export function useDID(accountId, walletAdapter) {
   const [didInfo, setDidInfo] = useState(null);
   const [isLoadingDID, setIsLoadingDID] = useState(false);
   const [didError, setDidError] = useState(null);
@@ -19,10 +30,10 @@ export function useDID(accountId) {
   const [showDIDModal, setShowDIDModal] = useState(false);
 
   /**
-   * Check if user has an existing DID
+   * Check if wallet has an existing DID on-chain
    */
   const checkDID = useCallback(async () => {
-    if (!accountId) {
+    if (!accountId || !walletAdapter) {
       return null;
     }
 
@@ -30,103 +41,70 @@ export function useDID(accountId) {
       setIsLoadingDID(true);
       setDidError(null);
 
-      console.log('🔍 Checking DID for account:', accountId);
-      
-      const existingDID = await checkExistingDID(accountId);
-      
+      const provider = createAnchorProvider(walletAdapter);
+      const program = getProgram(provider);
+      const wallet = new PublicKey(accountId);
+
+      const existingDID = await checkExistingDID(program, wallet);
+
       if (existingDID) {
-        console.log('✅ Found existing DID:', existingDID.did);
         setDidInfo(existingDID);
         setHasDID(true);
         return existingDID;
       } else {
-        console.log('ℹ️ No DID found for this account');
         setHasDID(false);
         return null;
       }
-
     } catch (error) {
-      console.error('❌ Error checking DID:', error);
       setDidError(error.message);
       setHasDID(false);
       return null;
     } finally {
       setIsLoadingDID(false);
     }
-  }, [accountId]);
+  }, [accountId, walletAdapter]);
 
-  /**
-   * Register a new DID for the user
-   */
-  const registerDID = useCallback(async (profile = {}) => {
-    if (!accountId) {
-      throw new Error('Account ID is required');
+  const ensureDIDBeforeMint = useCallback(async () => {
+    const existingDID = await checkDID();
+    if (existingDID) {
+      return existingDID;
     }
+    setShowDIDModal(true);
+    return new Promise((resolve, reject) => {
+      window.__didRegistrationResolve = resolve;
+      window.__didRegistrationReject = reject;
+    });
+  }, [checkDID]);
 
+  const completeDIDRegistration = useCallback(async (metadata) => {
     try {
       setIsLoadingDID(true);
       setDidError(null);
 
-      console.log('🆕 Registering new DID for account:', accountId);
-      console.log('📝 Profile:', profile);
+      const username = metadata.username;
+      const validation = validateUsername(username);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
 
-      // Pass skipCheck=true since we already checked before showing the modal
-      const newDID = await getOrCreateDID(accountId, profile, true);
+      const [didProfilePDA] = deriveDidProfilePDA(username);
+      const didString = `did:anft:${didProfilePDA.toBase58()}`;
 
-      console.log('🎉 DID registration complete!');
-      console.log('🆔 DID:', newDID.did);
+      const newDID = {
+        did: didString,
+        username: username,
+        pdaAddress: didProfilePDA.toBase58(),
+        currentWallet: accountId,
+        originalWallet: accountId,
+        createdAt: Math.floor(Date.now() / 1000),
+        attestationCount: 0,
+        isNew: true,
+      };
 
       setDidInfo(newDID);
       setHasDID(true);
       setShowDIDModal(false);
 
-      return newDID;
-
-    } catch (error) {
-      console.error('❌ Error registering DID:', error);
-      setDidError(error.message);
-      throw error;
-    } finally {
-      setIsLoadingDID(false);
-    }
-  }, [accountId]);
-
-  /**
-   * Ensure user has a DID before minting
-   * This is the main function to call before minting an NFT
-   */
-  const ensureDIDBeforeMint = useCallback(async () => {
-    console.log('🔐 Ensuring DID before minting...');
-
-    // First check if DID already exists
-    const existingDID = await checkDID();
-
-    if (existingDID) {
-      console.log('✅ User has DID, can proceed with minting');
-      return existingDID;
-    }
-
-    // No DID exists - show registration modal
-    console.log('⚠️ No DID found, showing registration modal');
-    setShowDIDModal(true);
-
-    // Return a promise that will be resolved when DID is registered
-    return new Promise((resolve, reject) => {
-      // Store resolve/reject functions to be called after registration
-      window.__didRegistrationResolve = resolve;
-      window.__didRegistrationReject = reject;
-    });
-
-  }, [checkDID]);
-
-  /**
-   * Complete DID registration and resolve the promise
-   */
-  const completeDIDRegistration = useCallback(async (metadata) => {
-    try {
-      const newDID = await registerDID(metadata);
-      
-      // Resolve the promise if it exists
       if (window.__didRegistrationResolve) {
         window.__didRegistrationResolve(newDID);
         delete window.__didRegistrationResolve;
@@ -134,9 +112,9 @@ export function useDID(accountId) {
       }
 
       return newDID;
-
     } catch (error) {
-      // Reject the promise if it exists
+      setDidError(error.message);
+
       if (window.__didRegistrationReject) {
         window.__didRegistrationReject(error);
         delete window.__didRegistrationResolve;
@@ -144,8 +122,10 @@ export function useDID(accountId) {
       }
 
       throw error;
+    } finally {
+      setIsLoadingDID(false);
     }
-  }, [registerDID]);
+  }, [accountId]);
 
   /**
    * Cancel DID registration
@@ -153,7 +133,6 @@ export function useDID(accountId) {
   const cancelDIDRegistration = useCallback(() => {
     setShowDIDModal(false);
 
-    // Reject the promise if it exists
     if (window.__didRegistrationReject) {
       window.__didRegistrationReject(new Error('DID registration cancelled by user'));
       delete window.__didRegistrationResolve;
@@ -162,15 +141,12 @@ export function useDID(accountId) {
   }, []);
 
   // Reset DID state when account changes
-  // NOTE: We don't check automatically - only when user clicks "Mint NFT"
   useEffect(() => {
     if (!accountId) {
-      // Only reset state when disconnected
       setDidInfo(null);
       setHasDID(false);
       setDidError(null);
     }
-    // Don't check DID automatically - wait for mint action
   }, [accountId]);
 
   return {
@@ -183,13 +159,11 @@ export function useDID(accountId) {
 
     // Functions
     checkDID,
-    registerDID,
     ensureDIDBeforeMint,
     completeDIDRegistration,
     cancelDIDRegistration,
-    setShowDIDModal
+    setShowDIDModal,
   };
 }
 
 export default useDID;
-

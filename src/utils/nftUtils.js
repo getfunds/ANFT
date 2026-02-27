@@ -1,26 +1,45 @@
 /**
- * NFT utility functions for fetching and processing NFT data
+ * NFT utility functions for fetching and processing NFT data (Solana)
  */
 
-const NETWORK = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+
+const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const CLUSTER = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'devnet';
 
 /**
- * Get all NFTs owned by an account from Hedera Mirror Node
+ * Get all NFTs owned by a wallet from Solana
  */
-export async function getAccountNFTs(accountId) {
+export async function getAccountNFTs(walletAddress) {
   try {
-    const baseUrl = NETWORK === 'mainnet' 
-      ? 'https://mainnet-public.mirrornode.hedera.com'
-      : 'https://testnet.mirrornode.hedera.com';
-    
-    const response = await fetch(`${baseUrl}/api/v1/accounts/${accountId}/nfts`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.nfts || [];
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const walletPubkey = new PublicKey(walletAddress);
+
+    // Fetch all token accounts for this wallet
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, {
+      programId: TOKEN_PROGRAM_ID,
+    });
+
+    // Filter for NFTs (amount = 1, decimals = 0)
+    const nfts = tokenAccounts.value
+      .filter((ta) => {
+        const info = ta.account.data.parsed.info;
+        return (
+          info.tokenAmount.decimals === 0 &&
+          info.tokenAmount.uiAmount === 1
+        );
+      })
+      .map((ta) => {
+        const info = ta.account.data.parsed.info;
+        return {
+          mint: info.mint,
+          owner: walletAddress,
+          token_account: ta.pubkey.toBase58(),
+        };
+      });
+
+    return nfts;
   } catch (error) {
     console.error('❌ Error getting account NFTs:', error);
     throw error;
@@ -60,81 +79,93 @@ export async function getNFTMetadata(metadataUrl) {
 }
 
 /**
- * Process raw NFT data from Mirror Node to user-friendly format
+ * Process raw NFT data from Solana to user-friendly format
+ * Uses Metaplex Token Metadata for on-chain metadata URI
  */
-export async function processNFTData(rawNfts, userAccountId) {
+export async function processNFTData(rawNfts, walletAddress) {
   const processedNfts = [];
-  
+
   for (const nft of rawNfts) {
     try {
-      // Decode metadata (usually base64 encoded IPFS URL)
       let metadataUrl = null;
       let metadata = null;
-      
-      if (nft.metadata) {
-        try {
-          // Try to decode base64
-          const decodedMetadata = atob(nft.metadata);
-          
-          // Check if it's an IPFS URL
-          if (decodedMetadata.includes('ipfs') || decodedMetadata.startsWith('http')) {
-            metadataUrl = decodedMetadata;
-            metadata = await getNFTMetadata(metadataUrl);
-          } else {
-            // Try parsing as JSON directly
-            metadata = JSON.parse(decodedMetadata);
-          }
-        } catch {
-          // If base64 decode fails, try as plain text
-          if (nft.metadata.includes('ipfs') || nft.metadata.startsWith('http')) {
-            metadataUrl = nft.metadata;
+
+      // Fetch on-chain metadata URI from Metaplex Token Metadata PDA
+      try {
+        const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+        const mintPubkey = new PublicKey(nft.mint);
+        const [metadataPDA] = PublicKey.findProgramAddressSync(
+          [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+
+        const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+        const accountInfo = await connection.getAccountInfo(metadataPDA);
+
+        if (accountInfo && accountInfo.data) {
+          // Parse Metaplex metadata to extract URI (simplified parsing)
+          const data = accountInfo.data;
+          // Skip discriminator(1) + key(1) + update_authority(32) + mint(32) = 66 bytes
+          // Then name: 4 bytes length + up to 32 bytes
+          // Then symbol: 4 bytes length + up to 10 bytes
+          // Then uri: 4 bytes length + up to 200 bytes
+          let offset = 1 + 32 + 32; // key + update_authority + mint
+          const nameLen = data.readUInt32LE(offset); offset += 4;
+          offset += nameLen; // skip name
+          const symbolLen = data.readUInt32LE(offset); offset += 4;
+          offset += symbolLen; // skip symbol
+          const uriLen = data.readUInt32LE(offset); offset += 4;
+          const uri = data.slice(offset, offset + uriLen).toString('utf-8').replace(/\0/g, '').trim();
+
+          if (uri && (uri.startsWith('http') || uri.startsWith('ipfs'))) {
+            metadataUrl = uri;
             metadata = await getNFTMetadata(metadataUrl);
           }
         }
+      } catch (metaErr) {
+        console.warn(`Could not fetch Metaplex metadata for ${nft.mint}:`, metaErr.message);
       }
-      
-      // Create processed NFT object
+
       const processedNft = {
-        id: `${nft.token_id}-${nft.serial_number}`,
-        tokenId: nft.token_id,
-        serialNumber: nft.serial_number,
-        name: metadata?.name || `NFT #${nft.serial_number}`,
+        id: nft.mint,
+        tokenId: nft.mint,
+        serialNumber: 1,
+        name: metadata?.name || `NFT ${nft.mint.substring(0, 8)}...`,
         description: metadata?.description || 'No description available',
         image: metadata?.image || metadata?.imageUrl || null,
-        creator: nft.account_id, // This might not always be the creator
-        owner: userAccountId,
+        creator: metadata?.creator || null,
+        owner: walletAddress,
         attributes: metadata?.attributes || [],
         metadataUrl: metadataUrl,
         rawMetadata: metadata,
-        createdAt: nft.created_timestamp ? new Date(nft.created_timestamp * 1000).toISOString() : null,
-        isReal: true, // Mark as real NFT from blockchain
-        relationship: 'owned' // We know user owns it since we fetched from their account
+        createdAt: null,
+        isReal: true,
+        relationship: 'owned',
       };
-      
+
       processedNfts.push(processedNft);
     } catch (error) {
-      console.warn(`Failed to process NFT ${nft.token_id}-${nft.serial_number}:`, error);
-      
-      // Add minimal NFT data even if processing fails
+      console.warn(`Failed to process NFT ${nft.mint}:`, error);
+
       processedNfts.push({
-        id: `${nft.token_id}-${nft.serial_number}`,
-        tokenId: nft.token_id,
-        serialNumber: nft.serial_number,
-        name: `NFT #${nft.serial_number}`,
+        id: nft.mint,
+        tokenId: nft.mint,
+        serialNumber: 1,
+        name: `NFT ${nft.mint.substring(0, 8)}...`,
         description: 'Unable to load metadata',
         image: null,
-        creator: nft.account_id,
-        owner: userAccountId,
+        creator: null,
+        owner: walletAddress,
         attributes: [],
         metadataUrl: null,
         rawMetadata: null,
-        createdAt: nft.created_timestamp ? new Date(nft.created_timestamp * 1000).toISOString() : null,
+        createdAt: null,
         isReal: true,
-        relationship: 'owned'
+        relationship: 'owned',
       });
     }
   }
-  
+
   return processedNfts;
 }
 

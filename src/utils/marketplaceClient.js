@@ -1,32 +1,26 @@
-/**
- * Client-side marketplace utilities
- * Makes API calls to server-side endpoints instead of direct smart contract calls
- */
+﻿
+import {
+  getMarketplaceListings as _getListings,
+  getListing,
+  createMarketplaceListing as _createListing,
+  purchaseNFT,
+  cancelListing,
+  placeBid,
+  makeOffer,
+  cancelOffer,
+  acceptOffer,
+  checkListingStatus,
+  getExplorerUrl,
+  lamportsToSol,
+} from './marketplace';
 
-/**
- * Get active marketplace listings with pagination
- * @param {number} offset - Starting index
- * @param {number} limit - Number of listings to fetch
- */
+
 export async function getMarketplaceListings(offset = 0, limit = 20) {
   try {
-    console.log('📋 Fetching marketplace listings...', { offset, limit });
-    
-    const response = await fetch(`/api/marketplace/listings?offset=${offset}&limit=${limit}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch listings: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to load listings');
-    }
-    
-    console.log('✅ Fetched marketplace listings:', data.listings.length);
-    return data.listings;
-    
+    console.log('📋 Fetching marketplace listings from on-chain...', { offset, limit });
+    const listings = await _getListings(offset, limit);
+    console.log('✅ Fetched marketplace listings:', listings.length);
+    return listings;
   } catch (error) {
     console.error('❌ Error fetching marketplace listings:', error);
     return [];
@@ -34,59 +28,14 @@ export async function getMarketplaceListings(offset = 0, limit = 20) {
 }
 
 /**
- * Create a new NFT listing
+ * Create a new NFT listing (on-chain transaction).
  */
-export async function createMarketplaceListing({
-  tokenAddress,
-  tokenId,
-  price,
-  duration = 604800, // 7 days default
-  isAuction = false,
-  royaltyPercentage = 0,
-  royaltyRecipient = null
-}, signer, accountId) {
+export async function createMarketplaceListing(params, walletAdapter, accountId) {
   try {
-    console.log('🏪 Creating marketplace listing...', {
-      tokenAddress,
-      tokenId,
-      price,
-      duration,
-      isAuction
-    });
-    
-    // For client-side, we'll make an API call to create the listing
-    const response = await fetch('/api/marketplace/listings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        tokenAddress,
-        tokenId,
-        price,
-        duration,
-        isAuction,
-        royaltyPercentage,
-        royaltyRecipient,
-        accountId,
-        // Note: In production, you'd need to sign this request
-        signature: 'placeholder'
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to create listing: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to create listing');
-    }
-    
-    console.log('✅ Listing created successfully:', data);
-    return data;
-    
+    console.log('🏪 Creating marketplace listing on-chain...', params);
+    const result = await _createListing(params, walletAdapter, accountId);
+    console.log('✅ Listing created successfully:', result);
+    return result;
   } catch (error) {
     console.error('❌ Error creating marketplace listing:', error);
     throw error;
@@ -94,38 +43,14 @@ export async function createMarketplaceListing({
 }
 
 /**
- * Purchase an NFT from a listing
+ * Purchase an NFT from a listing (on-chain transaction).
  */
-export async function purchaseNFTFromMarketplace(listingId, price, signer, accountId) {
+export async function purchaseNFTFromMarketplace(nftMintAddress, price, walletAdapter, accountId) {
   try {
-    console.log('💰 Purchasing NFT from marketplace...', { listingId, price });
-    
-    const response = await fetch('/api/marketplace/purchase', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        listingId,
-        buyerAccountId: accountId,
-        paymentAmount: price,
-        signature: 'placeholder'
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to purchase NFT: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to purchase NFT');
-    }
-    
-    console.log('✅ NFT purchased successfully:', data);
-    return data;
-    
+    console.log('💰 Purchasing NFT from marketplace...', { nftMintAddress, price });
+    const result = await purchaseNFT(nftMintAddress, walletAdapter, accountId);
+    console.log('✅ NFT purchased successfully:', result);
+    return result;
   } catch (error) {
     console.error('❌ Error purchasing NFT:', error);
     throw error;
@@ -133,38 +58,14 @@ export async function purchaseNFTFromMarketplace(listingId, price, signer, accou
 }
 
 /**
- * Place a bid on an auction
+ * Place a bid on an auction (on-chain transaction).
  */
-export async function placeBidOnAuction(listingId, bidAmount, signer, accountId) {
+export async function placeBidOnAuction(nftMintAddress, bidAmount, walletAdapter, accountId) {
   try {
-    console.log('🎯 Placing bid on auction...', { listingId, bidAmount });
-    
-    const response = await fetch('/api/marketplace/bid', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        listingId,
-        bidAmount,
-        accountId,
-        signature: 'placeholder'
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to place bid: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to place bid');
-    }
-    
-    console.log('✅ Bid placed successfully:', data);
-    return data;
-    
+    console.log('🎯 Placing bid on auction...', { nftMintAddress, bidAmount });
+    const result = await placeBid(nftMintAddress, bidAmount, walletAdapter, accountId);
+    console.log('✅ Bid placed successfully:', result);
+    return result;
   } catch (error) {
     console.error('❌ Error placing bid:', error);
     throw error;
@@ -172,39 +73,18 @@ export async function placeBidOnAuction(listingId, bidAmount, signer, accountId)
 }
 
 /**
- * Make an offer on a listing
+ * Make an offer on a listing (on-chain transaction).
  */
-export async function makeOfferOnListing(listingId, offerAmount, duration, signer, accountId) {
+export async function makeOfferOnListing(nftMintAddress, offerAmount, duration, walletAdapter, accountId) {
   try {
-    console.log('💡 Making offer on listing...', { listingId, offerAmount, duration });
-    
-    const response = await fetch('/api/marketplace/offers', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        listingId,
-        offerAmount,
-        duration,
-        accountId,
-        signature: 'placeholder'
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to make offer: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to make offer');
-    }
-    
-    console.log('✅ Offer made successfully:', data);
-    return data;
-    
+    console.log('💡 Making offer on listing...', { nftMintAddress, offerAmount, duration });
+    const result = await makeOffer(
+      { listingId: nftMintAddress, amount: offerAmount, duration },
+      walletAdapter,
+      accountId
+    );
+    console.log('✅ Offer made successfully:', result);
+    return result;
   } catch (error) {
     console.error('❌ Error making offer:', error);
     throw error;
@@ -212,32 +92,28 @@ export async function makeOfferOnListing(listingId, offerAmount, duration, signe
 }
 
 /**
- * Get detailed information about a specific listing
+ * Get detailed information about a specific listing (on-chain read).
  */
-export async function getListingDetails(listingId) {
+export async function getListingDetails(nftMintAddress) {
   try {
-    console.log('🔍 Fetching listing details...', { listingId });
-    
-    const response = await fetch(`/api/marketplace/listings/${listingId}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch listing details: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to load listing details');
-    }
-    
-    console.log('✅ Fetched listing details:', data.listing);
-    return data.listing;
-    
+    console.log('🔍 Fetching listing details from on-chain...', { nftMintAddress });
+    const listing = await getListing(nftMintAddress);
+    console.log('✅ Fetched listing details:', listing);
+    return listing;
   } catch (error) {
     console.error('❌ Error fetching listing details:', error);
     throw error;
   }
 }
+
+export {
+  cancelListing,
+  cancelOffer,
+  acceptOffer,
+  checkListingStatus,
+  getExplorerUrl,
+  lamportsToSol,
+};
 
 export default {
   getMarketplaceListings,
@@ -245,5 +121,11 @@ export default {
   purchaseNFTFromMarketplace,
   placeBidOnAuction,
   makeOfferOnListing,
-  getListingDetails
+  getListingDetails,
+  cancelListing,
+  cancelOffer,
+  acceptOffer,
+  checkListingStatus,
+  getExplorerUrl,
+  lamportsToSol,
 };

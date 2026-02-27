@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -65,7 +65,7 @@ function ListingSuccessContent() {
               <div className={styles.nftName}>{nftData.name}</div>
               <div className={styles.nftPrice}>
                 <span className={styles.priceLabel}>Listed for:</span>
-                <span className={styles.priceValue}>{nftData.price} HBAR</span>
+                <span className={styles.priceValue}>{nftData.price} SOL</span>
               </div>
               <div className={styles.nftToken}>
                 <span className={styles.tokenLabel}>Token ID:</span>
@@ -101,8 +101,8 @@ function ListingSuccessContent() {
         </div>
 
         {/* Additional Action */}
-        <Link href="/my-nfts" className={styles.linkButton}>
-          ← Back to My NFTs
+        <Link href="/profile" className={styles.linkButton}>
+          ← Back to My Profile
         </Link>
       </div>
     </div>

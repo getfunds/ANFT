@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -7,32 +7,12 @@ import Image from 'next/image';
 import styles from './page.module.css';
 
 /**
- * Convert EVM address to Hedera ID format
- * @param {string} address - EVM address (0x... or without 0x prefix)
- * @returns {string} Hedera ID (0.0.xxxxx)
+ * Format a Solana address for display (truncated)
  */
-function evmAddressToHederaId(address) {
+function formatAddress(address) {
   if (!address) return '';
-  
-  // If already in Hedera format, return as is
-  if (address.startsWith('0.0.')) {
-    return address;
-  }
-  
-  // Handle hex string with or without 0x prefix
-  let hex = address;
-  if (address.startsWith('0x')) {
-    hex = address.slice(2);
-  }
-  
-  // Check if it's a valid hex string
-  if (/^[0-9a-fA-F]+$/.test(hex)) {
-    // Convert to decimal
-    const decimal = parseInt(hex, 16);
-    return `0.0.${decimal}`;
-  }
-  
-  return address;
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function PurchaseSuccessContent() {
@@ -40,17 +20,15 @@ function PurchaseSuccessContent() {
   const router = useRouter();
   
   const nftName = searchParams.get('name') || 'NFT';
-  const tokenIdRaw = searchParams.get('tokenId') || '';
-  const tokenId = evmAddressToHederaId(tokenIdRaw); // Convert to Hedera ID
+  const tokenId = searchParams.get('tokenId') || '';
   const serialNumber = searchParams.get('serialNumber') || '';
   const transactionId = searchParams.get('transactionId') || '';
   const price = searchParams.get('price') || '';
   const imageUrl = searchParams.get('image') || '';
   
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
-  const hashscanUrl = network === 'mainnet'
-    ? `https://hashscan.io/mainnet/transaction/${transactionId}`
-    : `https://hashscan.io/testnet/transaction/${transactionId}`;
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'devnet';
+  const clusterParam = cluster === 'mainnet-beta' ? '' : `?cluster=${cluster}`;
+  const explorerUrl = `https://explorer.solana.com/tx/${transactionId}${clusterParam}`;
   
   return (
     <div className={styles.container}>
@@ -102,7 +80,7 @@ function PurchaseSuccessContent() {
                 {price && (
                   <div className={styles.detailItem}>
                     <span className={styles.detailLabel}>Price Paid:</span>
-                    <span className={styles.detailValue}>{price} HBAR</span>
+                    <span className={styles.detailValue}>{price} SOL</span>
                   </div>
                 )}
               </div>
@@ -112,7 +90,7 @@ function PurchaseSuccessContent() {
         
         {/* Action Buttons */}
         <div className={styles.actions}>
-          <Link href="/my-nfts" className={styles.primaryButton}>
+          <Link href="/profile" className={styles.primaryButton}>
             <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
@@ -121,7 +99,7 @@ function PurchaseSuccessContent() {
           
           {transactionId && (
             <a 
-              href={hashscanUrl}
+              href={explorerUrl}
               target="_blank"
               rel="noopener noreferrer"
               className={styles.secondaryButton}
@@ -129,7 +107,7 @@ function PurchaseSuccessContent() {
               <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              View Transaction on HashScan
+              View Transaction on Solana Explorer
             </a>
           )}
           
@@ -145,7 +123,7 @@ function PurchaseSuccessContent() {
           </svg>
           <p className={styles.infoText}>
             Your NFT is now in your wallet and can be viewed in the &quot;My NFTs&quot; section. 
-            The transaction has been recorded on the Hedera network.
+            The transaction has been recorded on the Solana network.
           </p>
         </div>
       </div>

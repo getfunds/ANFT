@@ -1,17 +1,21 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  connectToWallet, 
-  disconnectWallet, 
-  getConnectionState,
-  isWalletConnected,
-  getPrimaryAccountId,
-  getAvailableWallets,
-  WALLET_TYPES
-} from '../utils/hashconnect';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import {
+  getAvailableWallets as detectWallets,
+  connectWallet as connectSolanaWallet,
+  disconnectWallet as disconnectSolanaWallet,
+  isWalletConnected as checkConnected,
+  getWalletPublicKey,
+} from '../utils/solanaWallet';
 
 const WalletContext = createContext();
+
+export const WALLET_TYPES = {
+  PHANTOM: 'phantom',
+  SOLFLARE: 'solflare',
+  BACKPACK: 'backpack',
+};
 
 export const useWallet = () => {
   const context = useContext(WalletContext);
@@ -24,58 +28,50 @@ export const useWallet = () => {
 export const WalletProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [accountId, setAccountId] = useState(null);
+  const [publicKey, setPublicKey] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [pairingString, setPairingString] = useState('');
   const [availableWallets, setAvailableWallets] = useState([]);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [connectedWalletType, setConnectedWalletType] = useState(null);
+  const walletAdapterRef = useRef(null);
 
   useEffect(() => {
-    // Check if wallet was previously connected
-    const checkConnection = async () => {
-      try {
-        const connected = isWalletConnected();
-        if (connected) {
-          setIsConnected(true);
-          setAccountId(getPrimaryAccountId());
-          const state = getConnectionState();
-          setConnectedWalletType(state.walletType);
-        }
-      } catch (error) {
-        console.error('Error checking wallet connection:', error);
-      }
-    };
+    // Detect available wallets after mount
+    const timer = setTimeout(() => {
+      const wallets = detectWallets();
+      setAvailableWallets(wallets);
 
-    // Get available wallets
-    const wallets = getAvailableWallets();
-    console.log('Setting available wallets:', wallets);
-    setAvailableWallets(wallets);
-    checkConnection();
+      // Auto-reconnect if Phantom was previously connected
+      if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
+        if (window.solana.isConnected && window.solana.publicKey) {
+          walletAdapterRef.current = window.solana;
+          setIsConnected(true);
+          setPublicKey(window.solana.publicKey);
+          setAccountId(window.solana.publicKey.toBase58());
+          setConnectedWalletType(WALLET_TYPES.PHANTOM);
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  const connect = async (walletType = WALLET_TYPES.BLADE) => {
+  const connect = async (walletType = WALLET_TYPES.PHANTOM) => {
     try {
-      console.log('WalletContext: Starting Blade wallet connection...');
-      
       setIsLoading(true);
       setError(null);
       setShowWalletModal(false);
-      
-      console.log('WalletContext: Calling connectToWallet with Blade');
-      const connectionData = await connectToWallet(WALLET_TYPES.BLADE);
-      console.log('WalletContext: Got connection data:', connectionData);
-      
-      // Direct connection for Blade wallet
-      if (connectionData.accountId) {
-        setIsConnected(true);
-        setAccountId(connectionData.accountId);
-        setConnectedWalletType(WALLET_TYPES.BLADE);
-        setIsLoading(false);
-      }
-      
+
+      const result = await connectSolanaWallet(walletType);
+
+      walletAdapterRef.current = result.adapter;
+      setIsConnected(true);
+      setPublicKey(result.publicKey);
+      setAccountId(result.accountId);
+      setConnectedWalletType(walletType);
+      setIsLoading(false);
     } catch (error) {
-      console.error('WalletContext: Error connecting wallet:', error);
       setError(`Connection failed: ${error.message}`);
       setIsLoading(false);
       setShowWalletModal(false);
@@ -84,14 +80,14 @@ export const WalletProvider = ({ children }) => {
 
   const disconnect = async () => {
     try {
-      disconnectWallet();
+      await disconnectSolanaWallet(walletAdapterRef.current);
+      walletAdapterRef.current = null;
       setIsConnected(false);
       setAccountId(null);
-      setPairingString('');
+      setPublicKey(null);
       setConnectedWalletType(null);
       setError(null);
     } catch (error) {
-      console.error('Error disconnecting wallet:', error);
       setError(error.message);
     }
   };
@@ -99,16 +95,17 @@ export const WalletProvider = ({ children }) => {
   const value = {
     isConnected,
     accountId,
+    publicKey,
     isLoading,
     error,
-    pairingString,
     availableWallets,
     showWalletModal,
     connectedWalletType,
+    walletAdapter: walletAdapterRef.current,
     connect,
     disconnect,
     setShowWalletModal,
-    clearError: () => setError(null)
+    clearError: () => setError(null),
   };
 
   return (

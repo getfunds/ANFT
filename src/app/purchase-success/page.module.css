@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #e8f5e9 0%, #ffffff 50%, #e8f5e9 100%);
+  background: var(--gradient-subtle);
   padding: 2rem 1rem;
 }
 
@@ -11,11 +11,12 @@
   max-width: 42rem;
   width: 100%;
   background: white;
-  border-radius: 1.5rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--neutral-200);
   padding: 3rem;
   text-align: center;
-  animation: slideUp 0.5s ease-out;
+  animation: modalSlideUp 0.4s var(--ease) both;
 }
 
 @keyframes slideUp {
@@ -34,7 +35,7 @@
   width: 5rem;
   height: 5rem;
   margin: 0 auto 2rem;
-  color: #4caf50;
+  color: var(--success);
   animation: scaleIn 0.5s ease-out 0.2s both;
 }
 
@@ -50,14 +51,14 @@
 .successIcon svg {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 4px 12px rgba(76, 175, 80, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(16, 185, 129, 0.3));
 }
 
 /* Title & Subtitle */
 .title {
   font-size: 2.5rem;
   font-weight: 800;
-  color: #1b5e20;
+  color: var(--neutral-900);
   margin-bottom: 0.75rem;
   animation: fadeIn 0.5s ease-out 0.3s both;
 }
@@ -73,18 +74,18 @@
 
 .subtitle {
   font-size: 1.125rem;
-  color: #616161;
+  color: var(--neutral-500);
   margin-bottom: 2.5rem;
   animation: fadeIn 0.5s ease-out 0.4s both;
 }
 
 /* NFT Preview */
 .nftPreview {
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-  border-radius: 1rem;
+  background: var(--neutral-50);
+  border-radius: var(--radius-lg);
   padding: 2rem;
   margin-bottom: 2.5rem;
-  border: 2px solid #e5e7eb;
+  border: 1.5px solid var(--neutral-200);
   animation: fadeIn 0.5s ease-out 0.5s both;
 }
 
@@ -110,7 +111,7 @@
 .nftName {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--neutral-900);
   margin-bottom: 1rem;
 }
 
@@ -119,9 +120,9 @@
   flex-direction: column;
   gap: 0.75rem;
   background: white;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   padding: 1rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--neutral-200);
 }
 
 .detailItem {
@@ -132,12 +133,12 @@
 }
 
 .detailLabel {
-  color: #6b7280;
+  color: var(--neutral-500);
   font-weight: 500;
 }
 
 .detailValue {
-  color: #111827;
+  color: var(--neutral-900);
   font-weight: 600;
 }
 
@@ -155,20 +156,21 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  background: var(--gradient-primary);
   color: white;
   padding: 1rem 2rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 1rem;
   text-decoration: none;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  transition: all 0.2s var(--ease);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
 }
 
 .primaryButton:hover {
+  filter: brightness(1.08);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+  box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
 }
 
 .secondaryButton {
@@ -176,22 +178,22 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
-  color: #4caf50;
+  background: white;
+  color: var(--neutral-700);
   padding: 1rem 2rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 1rem;
   text-decoration: none;
-  border: 2px solid #4caf50;
-  transition: all 0.3s ease;
+  border: 1.5px solid var(--neutral-200);
+  transition: all 0.2s var(--ease);
 }
 
 .secondaryButton:hover {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
-  color: white;
+  border-color: var(--brand-500);
+  color: var(--brand-600);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.1);
 }
 
 .tertiaryButton {
@@ -199,18 +201,18 @@
   align-items: center;
   justify-content: center;
   background: none;
-  color: #6b7280;
+  color: var(--neutral-500);
   padding: 0.75rem 2rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
   font-size: 0.95rem;
   text-decoration: none;
-  transition: all 0.3s ease;
+  transition: all 0.2s var(--ease);
 }
 
 .tertiaryButton:hover {
-  background: #f3f4f6;
-  color: #4caf50;
+  background: var(--neutral-100);
+  color: var(--brand-600);
 }
 
 .buttonIcon {
@@ -223,9 +225,9 @@
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-  border: 1px solid #90caf9;
-  border-radius: 0.75rem;
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-md);
   padding: 1rem;
   animation: fadeIn 0.5s ease-out 0.7s both;
 }
@@ -233,14 +235,14 @@
 .infoIcon {
   width: 1.5rem;
   height: 1.5rem;
-  color: #1976d2;
+  color: var(--brand-600);
   flex-shrink: 0;
 }
 
 .infoText {
   text-align: left;
   font-size: 0.875rem;
-  color: #0d47a1;
+  color: var(--brand-800);
   line-height: 1.6;
   margin: 0;
 }

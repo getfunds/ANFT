@@ -160,7 +160,7 @@ const blobToBase64 = (blob) => {
 // Upload image to IPFS (using Filebase IPFS service)
 export const uploadImageToIPFS = async (imageBlob, metadata) => {
   try {
-    console.log('🎨 Starting AI NFT upload to Filebase IPFS...');
+    console.log('🎨 Starting NFT upload to Filebase IPFS...');
 
     // Import Filebase utility
     const { uploadNFTToFilebase } = await import('./filebaseIPFS');
@@ -171,8 +171,8 @@ export const uploadImageToIPFS = async (imageBlob, metadata) => {
 
     // Create NFT metadata structure
     const nftMetadata = {
-      name: metadata.name || "AI Generated Art",
-      description: metadata.description || "Unique AI-generated artwork",
+      name: metadata.name || "Generated Artwork",
+      description: metadata.description || "Unique artwork created on ANFT",
       // image URL will be added by uploadNFTToFilebase
       attributes: [
         {
@@ -192,7 +192,7 @@ export const uploadImageToIPFS = async (imageBlob, metadata) => {
       external_url: metadata.externalUrl || "",
       animation_url: "",
       properties: {
-        category: "AI Art",
+        category: "Digital Art",
         creator: metadata.creator || "Unknown",
         generatedAt: new Date().toISOString()
       }
@@ -201,7 +201,7 @@ export const uploadImageToIPFS = async (imageBlob, metadata) => {
     // Upload to Filebase IPFS (image + metadata)
     const result = await uploadNFTToFilebase(imageBlob, nftMetadata, imageFileName);
 
-    console.log('✅ AI NFT uploaded to Filebase IPFS successfully');
+    console.log('✅ NFT uploaded to Filebase IPFS successfully');
 
     return {
       success: true,

@@ -1,0 +1,90 @@
+{
+  "schemaId": "51NQSMyR8mVYooqMW8spHx7k9b57dXyksmSogBvEbntF",
+  "name": "ANFT_MINT_V1",
+  "version": "1.0.0",
+  "authority": "Gyeu1n6z7sXaT32WHTUxpGipukXCewKw3rRxNKtaiofg",
+  "network": "devnet",
+  "registeredAt": "2026-02-23T12:37:52.756Z",
+  "fields": [
+    {
+      "name": "creatorDID",
+      "type": "string",
+      "required": true,
+      "description": "Creator DID in format did:anft:<pda>"
+    },
+    {
+      "name": "timestamp",
+      "type": "number",
+      "required": true,
+      "description": "Unix timestamp of attestation creation"
+    },
+    {
+      "name": "network",
+      "type": "string",
+      "required": true,
+      "description": "Solana network: devnet, testnet, or mainnet-beta"
+    },
+    {
+      "name": "platform",
+      "type": "string",
+      "required": true,
+      "description": "Platform identifier (ANFT)"
+    },
+    {
+      "name": "nftName",
+      "type": "string",
+      "required": true,
+      "description": "NFT artwork title/name"
+    },
+    {
+      "name": "nftDescription",
+      "type": "string",
+      "required": false,
+      "description": "NFT artwork description"
+    },
+    {
+      "name": "creatorAddress",
+      "type": "string",
+      "required": true,
+      "description": "Solana wallet address of the creator"
+    },
+    {
+      "name": "imageHash",
+      "type": "string",
+      "required": true,
+      "description": "SHA-256 hash of the image file"
+    },
+    {
+      "name": "metadataHash",
+      "type": "string",
+      "required": true,
+      "description": "SHA-256 hash of the metadata JSON"
+    },
+    {
+      "name": "imageCID",
+      "type": "string",
+      "required": true,
+      "description": "IPFS CID of the image file"
+    },
+    {
+      "name": "metadataCID",
+      "type": "string",
+      "required": true,
+      "description": "IPFS CID of the metadata JSON"
+    },
+    {
+      "name": "nftMintAddress",
+      "type": "string",
+      "required": true,
+      "description": "SPL token mint address of the NFT"
+    },
+    {
+      "name": "royaltyBps",
+      "type": "number",
+      "required": false,
+      "description": "Royalty percentage in basis points (e.g., 500 = 5%)"
+    }
+  ],
+  "immutable": true,
+  "authorityEnforced": true
+}

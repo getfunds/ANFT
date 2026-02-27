@@ -1,136 +1,63 @@
 /**
  * API endpoint for marketplace listings
- * Handles fetching, creating, and managing NFT listings
+ *
+ * GET: Reads active listings from on-chain Listing PDAs.
+ * POST: No longer needed — listing is signed client-side via wallet adapter.
  */
-
-// Server-side marketplace utilities will be imported dynamically to avoid client-side issues
 
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      // Fetch marketplace listings with pagination
       const { offset = 0, limit = 20, filter, sort } = req.query;
-      
-      console.log('📋 API: Fetching marketplace listings...', { offset, limit, filter, sort });
-      
-      // Fetch real listings from the smart contract
+
+      console.log('📋 API: Fetching on-chain marketplace listings...', { offset, limit, filter, sort });
+
       let listings = [];
-      
+
       try {
-        // Dynamic import to avoid client-side issues
-        const { getMarketplaceListings } = await import('../../../utils/marketplace');
-        listings = await getMarketplaceListings(parseInt(offset), parseInt(limit));
-        console.log(`✅ Found ${listings.length} listings from smart contract`);
-      } catch (contractError) {
-        console.warn('⚠️ Smart contract not available, returning empty listings:', contractError.message);
+        const { getActiveListings } = await import('../../../utils/marketplace');
+        listings = await getActiveListings();
+        console.log(`✅ Found ${listings.length} active listings on-chain`);
+      } catch (err) {
+        console.warn('⚠️ Could not read on-chain listings:', err.message);
         listings = [];
       }
-      
-      // Apply filters if provided
-      let filteredListings = listings;
-      
-      if (filter === 'auction') {
-        filteredListings = filteredListings.filter(listing => listing.isAuction);
-      } else if (filter === 'fixed') {
-        filteredListings = filteredListings.filter(listing => !listing.isAuction);
-      }
-      
+
+      // Apply filters
+      let filtered = listings;
+      if (filter === 'auction') filtered = filtered.filter(l => l.isAuction);
+      else if (filter === 'fixed') filtered = filtered.filter(l => !l.isAuction);
+
       // Apply sorting
-      if (sort === 'price-low') {
-        filteredListings.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-      } else if (sort === 'price-high') {
-        filteredListings.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-      } else if (sort === 'oldest') {
-        filteredListings.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      } else {
-        // Default: newest first
-        filteredListings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      }
-      
-      // Apply pagination
-      const startIndex = parseInt(offset);
-      const endIndex = startIndex + parseInt(limit);
-      const paginatedListings = filteredListings.slice(startIndex, endIndex);
-      
+      if (sort === 'price-low') filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+      else if (sort === 'price-high') filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+      else if (sort === 'oldest') filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      else filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      const start = parseInt(offset);
+      const end = start + parseInt(limit);
+
       res.status(200).json({
         success: true,
-        marketplaceContractId: process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ID || null,
-        listings: paginatedListings,
-        total: filteredListings.length,
-        offset: parseInt(offset),
-        limit: parseInt(limit)
+        listings: filtered.slice(start, end),
+        total: filtered.length,
+        offset: start,
+        limit: parseInt(limit),
       });
-      
+
     } else if (req.method === 'POST') {
-      // Create a new marketplace listing
-      const {
-        tokenAddress,
-        tokenId,
-        price,
-        duration,
-        isAuction,
-        royaltyPercentage,
-        royaltyRecipient,
-        accountId,
-        signature
-      } = req.body;
-      
-      console.log('🏪 API: Creating marketplace listing...', {
-        tokenAddress,
-        tokenId,
-        price,
-        isAuction
+      // Listing creation is now handled entirely client-side via the Anchor program.
+      res.status(200).json({
+        success: false,
+        message: 'Listing creation is handled client-side via wallet signing. Use the marketplace.js createMarketplaceListing function.',
       });
-      
-      // Validate required fields
-      if (!tokenAddress || !tokenId || !price || !accountId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing required fields: tokenAddress, tokenId, price, accountId'
-        });
-      }
-      
-      // Validate price
-      if (parseFloat(price) <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Price must be greater than 0'
-        });
-      }
-      
-      // In production, this would:
-      // 1. Verify the user owns the NFT
-      // 2. Check if NFT is already listed
-      // 3. Validate the signature
-      // 4. Call the smart contract to create the listing
-      
-      // For now, return success with mock listing ID
-      const mockListingId = Math.floor(Math.random() * 10000) + 1000;
-      
-      res.status(201).json({
-        success: true,
-        marketplaceContractId: process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ID || null,
-        listingId: mockListingId,
-        message: 'Listing created successfully',
-        transactionId: `0.0.${Math.floor(Math.random() * 100000)}@${Date.now()}.${Math.floor(Math.random() * 1000000)}`
-      });
-      
+
     } else {
       res.setHeader('Allow', ['GET', 'POST']);
-      res.status(405).json({
-        success: false,
-        error: `Method ${req.method} not allowed`
-      });
+      res.status(405).json({ success: false, error: `Method ${req.method} not allowed` });
     }
-    
   } catch (error) {
     console.error('❌ API Error in /marketplace/listings:', error);
-    res.status(500).json({
-      success: false,
-      marketplaceContractId: process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ID || null,
-      error: 'Internal server error',
-      details: error.message
-    });
+    res.status(500).json({ success: false, error: 'Internal server error', details: error.message });
   }
 }
-

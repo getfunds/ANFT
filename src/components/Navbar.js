@@ -1,24 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useWallet } from '../context/WalletContext';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import styles from './Navbar.module.css';
+
+const NAV_ITEMS = [
+  { href: '/', label: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { href: '/create-select', label: 'Create', icon: 'M12 4v16m8-8H4' },
+  { href: '/marketplace', label: 'Marketplace', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
+  { href: '/profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+];
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isConnected, accountId, disconnect, isLoading, error, connectedWalletType, setShowWalletModal } = useWallet();
+  const [didSearch, setDidSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const formatAccountId = (id) => {
-    if (!id) return '';
-    // Return full account ID without truncation
-    return id;
-  };
+  useEffect(() => { setMounted(true); }, []);
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const handleConnectClick = () => {
-    console.log('Connect button clicked - opening wallet modal');
-    setShowWalletModal(true);
+  const handleDIDSearch = (e) => {
+    e.preventDefault();
+    const q = didSearch.trim();
+    if (!q) return;
+    router.push(`/did?q=${encodeURIComponent(q)}`);
+    setDidSearch('');
+    setSearchFocused(false);
+    setIsMenuOpen(false);
   };
 
   return (
@@ -36,97 +49,55 @@ const Navbar = () => {
                 priority
               />
             </div>
-            <span className={styles.logoBadge}>Authentic</span>
+            <span className={styles.logoBadge}>ANFT</span>
           </Link>
 
           <div className={styles.desktopNav}>
-            <Link href="/" className={styles.navLink}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              <span>Home</span>
-            </Link>
-            <Link href="/create-select" className={styles.navLink}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Create</span>
-            </Link>
-            <Link href="/marketplace" className={styles.navLink}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              <span>Marketplace</span>
-            </Link>
-            <Link href="/my-nfts" className={styles.navLink}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              <span>My NFTs</span>
-            </Link>
+            {NAV_ITEMS.map(({ href, label, icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`${styles.navLink} ${pathname === href ? styles.navLinkActive : ''}`}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                </svg>
+                <span>{label}</span>
+              </Link>
+            ))}
           </div>
 
-          <div className={styles.walletSection}>
-            {isConnected ? (
-              <div className={styles.connectedWallet}>
-                <div className={styles.walletInfo}>
-                  <div className={styles.walletIconSmall}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                  </div>
-                  <div className={styles.walletDetails}>
-                    <span className={styles.accountId}>
-                      {formatAccountId(accountId)}
-                    </span>
-                    {connectedWalletType && (
-                      <span className={styles.walletType}>
-                        Blade Wallet
-                      </span>
-                    )}
-                  </div>
-                  <div className={styles.statusIndicator}>
-                    <div className={styles.statusDot}></div>
-                  </div>
-                </div>
-                <button
-                  onClick={disconnect}
-                  className={styles.disconnectButton}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          <div className={styles.rightSection}>
+            <form onSubmit={handleDIDSearch} className={`${styles.searchForm} ${searchFocused ? styles.searchFormFocused : ''}`}>
+              <svg className={styles.searchIcon} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={didSearch}
+                onChange={(e) => setDidSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Search creator..."
+                className={styles.searchInput}
+              />
+              {didSearch && (
+                <button type="submit" className={styles.searchSubmit} aria-label="Search">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
-                  <span>Disconnect</span>
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleConnectClick}
-                disabled={isLoading}
-                className={styles.connectButton}
-              >
-                {isLoading ? (
-                  <>
-                    <div className={styles.loadingSpinner}></div>
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    <span>Connect Wallet</span>
-                  </>
-                )}
-              </button>
-            )}
+              )}
+            </form>
+
+            {mounted && <WalletMultiButton className={styles.walletBtn} />}
 
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={styles.mobileMenuButton}
+              className={styles.mobileMenuBtn}
               aria-label="Toggle menu"
             >
-              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isMenuOpen ? (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 ) : (
@@ -139,72 +110,35 @@ const Navbar = () => {
 
         {isMenuOpen && (
           <div className={styles.mobileMenu}>
-            <div className={styles.mobileNavLinks}>
-              <Link 
-                href="/" 
-                className={styles.mobileNavLink}
+            {NAV_ITEMS.map(({ href, label, icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`${styles.mobileLink} ${pathname === href ? styles.mobileLinkActive : ''}`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
                 </svg>
-                <span>Home</span>
+                <span>{label}</span>
               </Link>
-              <Link 
-                href="/create-select" 
-                className={styles.mobileNavLink}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Create NFT</span>
-              </Link>
-              <Link 
-                href="/marketplace" 
-                className={styles.mobileNavLink}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-                <span>Marketplace</span>
-              </Link>
-              <Link 
-                href="/my-nfts" 
-                className={styles.mobileNavLink}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span>My NFTs</span>
-              </Link>
+            ))}
+            <div className={styles.mobileDivider} />
+            <form onSubmit={handleDIDSearch} className={styles.mobileSearchForm}>
+              <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={didSearch}
+                onChange={(e) => setDidSearch(e.target.value)}
+                placeholder="Search creator or DID..."
+                className={styles.mobileSearchInput}
+              />
+            </form>
+            <div className={styles.mobileWallet}>
+              {mounted && <WalletMultiButton className={styles.walletBtn} />}
             </div>
-            
-            {!isConnected && (
-              <div className={styles.mobileWalletSection}>
-                <button
-                  onClick={handleConnectClick}
-                  disabled={isLoading}
-                  className={styles.mobileConnectButton}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className={styles.loadingSpinner}></div>
-                      <span>Connecting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                      <span>Connect Wallet</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

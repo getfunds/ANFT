@@ -16,7 +16,7 @@ Think of it as a digital birth certificate for every artwork—one that can neve
 
 A Decentralized Identity (DID) is like a digital passport that proves you are who you say you are, but unlike traditional accounts, **you own and control it completely**. No central authority can take it away or manipulate it.
 
-When you create your first NFT on ANFT, the platform helps you establish your DID on the Hedera network. This becomes your permanent creative identity.
+When you create your first NFT on ANFT, the platform helps you establish your DID on the Solana blockchain via the ANFT Anchor program. This becomes your permanent creative identity.
 
 #### Why do we use it?
 
@@ -28,10 +28,10 @@ When you create your first NFT on ANFT, the platform helps you establish your DI
 #### How does it work?
 
 1. **First-Time Setup**: When you're about to mint your first NFT, the system checks if you already have a DID
-2. **Creation**: If you don't have one, a beautiful guided wizard walks you through creating your creator profile
-3. **Blockchain Registration**: Your DID and public key are registered on Hedera, creating a permanent record
-4. **Wallet Signing**: You sign the creation with your Blade Wallet, proving you authorized it
-5. **Storage**: Your DID information is stored both on Hedera and locally for quick access
+2. **Creation**: If you don't have one, a guided wizard walks you through creating your creator profile
+3. **Blockchain Registration**: Your DID and public key are registered on Solana via the `anft_did` Anchor program, creating a permanent on-chain record
+4. **Wallet Signing**: You sign the creation with your Solana wallet (Phantom, Solflare, or Backpack), proving you authorized it
+5. **On-Chain Storage**: Your DID is stored in a Program Derived Address (PDA) on Solana
 
 #### Real-World Benefits
 
@@ -61,8 +61,8 @@ A content hash is like a unique fingerprint for your artwork. It's a mathematica
 2. **Metadata Fingerprinting**: We also hash your NFT's metadata (name, description, attributes)
 3. **Combined Fingerprint**: These are combined into a single `contentHash` that uniquely identifies this artwork
 4. **Permanent Record**: This hash is stored in multiple places:
-   - In the NFT's on-chain metadata
-   - In the attestation record
+   - In the NFT's on-chain metadata (Metaplex Token Metadata)
+   - In the SAS attestation record
    - On IPFS alongside the artwork
 
 #### Real-World Benefits
@@ -78,7 +78,7 @@ A content hash is like a unique fingerprint for your artwork. It's a mathematica
 
 #### What is it?
 
-An attestation is a permanent, timestamped statement recorded on the Hedera blockchain that says: *"On this date and time, this creator (DID) created this specific artwork (content hash)."* 
+An attestation is a permanent, timestamped statement recorded on Solana via the **Solana Attestation Service (SAS)** that says: *"On this date and time, this creator (DID) created this specific artwork (content hash)."*
 
 Think of it as a notarized certificate that can never be changed or destroyed.
 
@@ -87,7 +87,7 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 - **Immutability**: Once recorded, it can never be altered or deleted
 - **Transparency**: Anyone can independently verify the attestation
 - **Timestamping**: Proves exactly when the creation occurred
-- **Decentralization**: The record exists on Hedera's network, not our servers
+- **Decentralization**: The record exists on Solana's network, not our servers
 - **Legal Weight**: Provides strong evidence of creation and authorship
 
 #### How does it work?
@@ -95,24 +95,24 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 1. **Attestation Creation**: After your artwork is finalized, we build an attestation record containing:
    - Your creator DID
    - The content hash of your artwork
+   - The NFT mint address
    - Timestamp of creation
-   - Creation method (AI or Digital Painting)
-   - Additional metadata (image hash, IPFS CIDs)
+   - Royalty basis points
 
-2. **Topic Management**: Each creator has their own attestation topic on Hedera (like a personal logbook)
-   - First attestation creates your topic
-   - Subsequent attestations add to the same topic
-   - You own and control this topic through your wallet
+2. **SAS Schema**: All attestations conform to the `ANFT_MINT_V1` schema registered on the Solana Attestation Service
+   - The ANFT platform authority signs each attestation
+   - Attestations are immutable once created
+   - Each attestation has a unique on-chain address
 
-3. **Blockchain Submission**: The attestation is submitted to Hedera Consensus Service (HCS)
-   - Your wallet signs the transaction
-   - Hedera records it permanently
-   - A transaction ID and sequence number are returned
+3. **Atomic Transaction**: The attestation is bundled into the same Solana transaction as the NFT mint
+   - Your wallet signs the entire transaction
+   - Solana records everything atomically
+   - A transaction signature and attestation address are returned
 
 4. **Verification**: Anyone can verify the attestation by:
-   - Querying Hedera with the topic ID and sequence number
+   - Looking up the attestation address on the SAS explorer
    - Checking that the DID, content hash, and timestamp match
-   - Confirming the creator's signature
+   - Confirming the ANFT authority's signature
 
 #### Real-World Benefits
 
@@ -129,35 +129,38 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 ### When You Create an NFT:
 
 1. **Identity Verification** (Step 1)
-   - System checks if you have a DID
+   - System checks if you have a DID on-chain
    - If not, guides you through creating one
-   - Your DID is registered on Hedera
+   - Your DID is registered on Solana via the `anft_did` program
 
 2. **Artwork Finalization** (Step 2)
-   - Your image is uploaded to IPFS (permanent decentralized storage)
+   - Your image is uploaded to IPFS via Filebase (permanent decentralized storage)
    - Content hashes are computed (image + metadata)
    - IPFS CIDs (content identifiers) are generated
 
 3. **Attestation Creation** (Step 3)
    - An attestation record is built linking your DID to the content hash
-   - Your attestation topic is created (first time) or reused
-   - The attestation is submitted to Hedera with your wallet signature
-   - You receive a permanent transaction ID
+   - The ANFT authority signs the SAS attestation server-side
+   - You receive a permanent attestation address
 
 4. **NFT Minting** (Step 4)
-   - The NFT is minted with complete metadata including:
+   - All operations are bundled into a single atomic Solana transaction:
+     - DID registration (first mint only)
+     - Metaplex NFT mint
+     - Attestation count increment
+     - SPL Memo with attestation reference
+   - The NFT metadata includes:
      - Creator DID
      - Content hash
-     - Attestation transaction ID
+     - SAS attestation address
      - IPFS locations
      - Timestamps
-   - All information is stored both on Hedera and in the NFT metadata
 
 ### When Someone Verifies Your NFT:
 
-1. **They can check your DID**: Verify you're the real creator
+1. **They can check your DID**: Verify you're the real creator via the `anft_did` program PDA
 2. **They can recompute the hash**: Download the artwork and verify the fingerprint matches
-3. **They can query the attestation**: See the permanent Hedera record of creation
+3. **They can query the attestation**: Look up the SAS attestation address on-chain
 4. **They can verify IPFS**: Confirm the artwork files haven't been tampered with
 
 ---
@@ -172,9 +175,9 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 - You have no proof you created it first
 
 **With our system:**
-- Your DID and attestation prove you created it first 
+- Your DID and attestation prove you created it first
 - The content hash proves it's your exact version
-- The Hedera record cannot be disputed or altered
+- The on-chain record cannot be disputed or altered
 - You have legal evidence for takedown requests
 
 ### Scenario 2: Collector Confidence
@@ -186,7 +189,7 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 
 **With our system:**
 - Collectors see verified creator DID
-- They can check the attestation on Hedera
+- They can check the SAS attestation on-chain
 - Content hash proves authenticity
 - Complete transparency builds trust
 
@@ -197,7 +200,7 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 - Proof of creation could be lost
 
 **With our system:**
-- Your DID exists on Hedera forever
+- Your DID exists on Solana forever
 - Attestations are permanent and decentralized
 - IPFS files remain accessible
 - Your creative legacy is preserved regardless of our platform
@@ -217,14 +220,21 @@ Think of it as a notarized certificate that can never be changed or destroyed.
 
 ## The Technology Behind the Scenes
 
-### Hedera Network
+### Solana Network
 
-We chose Hedera because it offers:
+We chose Solana because it offers:
 - **Low Costs**: Transactions cost fractions of a cent
-- **High Speed**: Finality in 3-5 seconds
-- **Energy Efficient**: Uses minimal energy compared to other blockchains
-- **Enterprise-Grade**: Governed by major corporations (Google, IBM, Boeing, etc.)
+- **High Speed**: Finality in under a second
+- **Energy Efficient**: Proof-of-Stake uses minimal energy
+- **Developer Ecosystem**: Rich tooling with Anchor, Metaplex, and SPL Token
 - **True Decentralization**: No single point of failure
+
+### Solana Attestation Service (SAS)
+
+- **Immutable Records**: Attestations cannot be altered once created
+- **Schema-Based**: Structured data via the `ANFT_MINT_V1` schema
+- **On-Chain Verification**: Anyone can verify attestations directly on Solana
+- **Explorer Support**: Attestations are viewable at `attest.solana.com`
 
 ### IPFS (InterPlanetary File System)
 
@@ -233,11 +243,12 @@ We chose Hedera because it offers:
 - **Permanence**: Once uploaded, files can't disappear
 - **Efficiency**: Duplicate files are automatically deduplicated
 
-### Blade Wallet Integration
+### Solana Wallet Integration
 
 - **User Control**: You sign everything, we never hold your keys
 - **Security**: Your private keys stay on your device
 - **Transparency**: Every transaction is clearly shown before signing
+- **Multi-Wallet**: Supports Phantom, Solflare, and Backpack
 
 ---
 
@@ -245,13 +256,12 @@ We chose Hedera because it offers:
 
 ### What You Control:
 - ✅ Your DID and private keys
-- ✅ Your attestation topics
 - ✅ When and what you create
 - ✅ Your creator profile information
 
 ### What's Public:
 - ✅ Your DID (but not your personal information)
-- ✅ Attestation records (creation proofs)
+- ✅ SAS attestation records (creation proofs)
 - ✅ NFT metadata
 - ✅ Content hashes
 
@@ -267,7 +277,7 @@ We chose Hedera because it offers:
 ### For Creators:
 
 ✨ **Authenticity**: Unquestionable proof you created your work
-✨ **Protection**: Strong defense against art theft and plagiarism  
+✨ **Protection**: Strong defense against art theft and plagiarism
 ✨ **Reputation**: Build a verifiable creative portfolio
 ✨ **Authorship**: True control over your digital identity
 ✨ **Legacy**: Permanent record that outlives any platform
@@ -319,21 +329,21 @@ Everything else happens automatically.
 
 ### What if I lose access to my wallet?
 
-Your DID and attestations remain on Hedera forever, but you'd need wallet recovery to prove you control them. Always back up your wallet recovery phrase securely.
+Your DID and attestations remain on Solana forever, but you'd need wallet recovery to prove you control them. Always back up your wallet recovery phrase securely.
 
 ### Can I use my DID on other platforms?
 
-Yes! Your Hedera DID is not locked to ANFT. Any platform that supports Hedera DIDs can recognize and verify your identity.
+Yes! Your ANFT DID is a standard `did:anft:` identifier stored on Solana. Any platform that integrates with the `anft_did` program can recognize and verify your identity.
 
 ### Does this cost extra?
 
-The small Hedera transaction fees (fractions of a cent) are already included in your minting process. There are no additional costs for DID or attestation.
+The small Solana transaction fees (fractions of a cent) are already included in your minting process. There are no additional costs for DID or attestation.
 
 ### How is this different from traditional NFTs?
 
 Most NFT platforms only record ownership transfers. We record:
 - Who created it (verified DID)
-- When it was created (attestation timestamp)  
+- When it was created (attestation timestamp)
 - What exactly was created (content hash)
 - Immutable proof it hasn't been altered
 
@@ -347,7 +357,7 @@ No. Only your DID (a public identifier), content hashes, and creation timestamps
 
 ## Conclusion
 
-The Digital Identity and On-Chain Provenance system transforms ANFT from a simple NFT marketplace into a **trust infrastructure for digital creativity**. 
+The Digital Identity and On-Chain Provenance system transforms ANFT from a simple NFT marketplace into a **trust infrastructure for digital creativity**.
 
 By combining Decentralized Identity (who you are), Content Hashing (what you created), and On-Chain Attestation (proof of creation), we've built a system where:
 

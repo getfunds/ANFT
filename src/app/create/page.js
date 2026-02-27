@@ -1,25 +1,19 @@
 'use client';
 
-// ✅ RESTORED: Now using Blade Wallet for NFT minting (after server-side testing confirmed working)
-// This uses the exact same AI generation + IPFS + NFT minting workflow
-// but with Blade Wallet signing instead of server-side signing
-// Following official Blade Labs documentation and best practices
-
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useWallet } from '../../context/WalletContext';
+import { useWallet } from '../../hooks/useWalletAdapter';
 import { generateImageFromPrompt, validatePrompt, generatePromptVariations, encryptPrompt } from '../../utils/aiImageGeneration';
-import { getCurrentWallet } from '../../utils/hashconnect';
 import { useDID } from '../../hooks/useDID';
 import { finalizeAIArtwork, finalizePaintedArtwork } from '../../utils/artworkFinalization';
-import { createAttestation } from '../../utils/attestation';
+import { mintNFTWorkflow } from '../../utils/solanaNFTMinting';
 import DIDRegistrationModal from '../../components/DIDRegistrationModal';
 import ConnectWalletPrompt from '../../components/ConnectWalletPrompt';
 import styles from './page.module.css';
 
 const CreatePage = () => {
-  const { isConnected, accountId, connectedWalletType } = useWallet();
+  const { isConnected, accountId, connectedWalletType, walletAdapter } = useWallet();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState([]);
@@ -30,25 +24,16 @@ const CreatePage = () => {
   const [success, setSuccess] = useState('');
   const [showVariations, setShowVariations] = useState(false);
   const [promptVariations, setPromptVariations] = useState([]);
-  
-  // Minting progress tracking
   const [mintingStep, setMintingStep] = useState('');
   const [mintingProgress, setMintingProgress] = useState([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [mintResult, setMintResult] = useState(null);
-  
-  // NFT Metadata
   const [nftName, setNftName] = useState('');
   const [nftDescription, setNftDescription] = useState('');
-  
-  // Step tracking
-  const [currentStep, setCurrentStep] = useState(1); // 1: Generate, 2: Select, 3: Mint
-  
-  // Painting studio integration
+  const [currentStep, setCurrentStep] = useState(1);
   const [isPaintingMode, setIsPaintingMode] = useState(false);
   const [paintingArtwork, setPaintingArtwork] = useState(null);
-  
-  // DID Management
+
   const {
     didInfo,
     hasDID,
@@ -57,9 +42,8 @@ const CreatePage = () => {
     ensureDIDBeforeMint,
     completeDIDRegistration,
     cancelDIDRegistration
-  } = useDID(accountId);
+  } = useDID(accountId, walletAdapter);
 
-  // Check for painting artwork from session storage
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const source = urlParams.get('source');
@@ -69,19 +53,14 @@ const CreatePage = () => {
       if (pendingArtwork) {
         try {
           const artworkData = JSON.parse(pendingArtwork);
-          console.log('🎨 Loading painting artwork for minting:', artworkData);
-          
           setPaintingArtwork(artworkData);
           setIsPaintingMode(true);
           setSelectedImage(artworkData.file);
           setNftName(artworkData.name || '');
           setNftDescription(artworkData.description || '');
-          setCurrentStep(3); // Skip to minting step
-          
-          // Clear from session storage
+          setCurrentStep(3);
           sessionStorage.removeItem('pendingArtwork');
-        } catch (error) {
-          console.error('❌ Error loading painting artwork:', error);
+        } catch {
           setError('Failed to load painting artwork');
         }
       }
@@ -106,27 +85,6 @@ const CreatePage = () => {
     setShowVariations(false);
   };
 
-  // Add debug functions for Blade Wallet troubleshooting
-  useEffect(() => {
-    const addDebugTools = async () => {
-      try {
-        const { addDebugFunctions } = await import('../../utils/bladeWalletDebug');
-        const { addSystemCheckToWindow } = await import('../../utils/systemCheck');
-        
-        addDebugFunctions();
-        addSystemCheckToWindow();
-        
-        console.log('🔧 Debug tools loaded:');
-        console.log('  - window.diagnoseBlade() - Blade Wallet diagnosis');
-        console.log('  - window.performSystemCheck() - Complete system check');
-      } catch (debugError) {
-        console.log('Debug tools not available:', debugError.message);
-      }
-    };
-    
-    addDebugTools();
-  }, []);
-
   const generateImage = async (promptToUse = prompt) => {
     if (!isConnected) {
       setError('Please connect your wallet first');
@@ -138,10 +96,7 @@ const CreatePage = () => {
       setError('');
       setSuccess('');
 
-      // Validate prompt
       validatePrompt(promptToUse);
-
-      // Generate image
       const result = await generateImageFromPrompt(promptToUse, {
         width: 512,
         height: 512,
@@ -160,9 +115,8 @@ const CreatePage = () => {
 
       setGeneratedImages(prev => [newImage, ...prev]);
       setSuccess(`AI image generated successfully using ${result.model}!`);
-      setCurrentStep(2); // Move to selection step
+      setCurrentStep(2);
     } catch (err) {
-      console.error('Error generating image:', err);
       setError(err.message);
     } finally {
       setIsGenerating(false);
@@ -171,9 +125,9 @@ const CreatePage = () => {
 
   const selectImage = (image) => {
     setSelectedImage(image);
-    setNftName(`AI Art - ${new Date(image.timestamp).toLocaleDateString()}`);
-    setNftDescription(`Unique AI-generated artwork created with the prompt: "${image.prompt.substring(0, 100)}${image.prompt.length > 100 ? '...' : ''}"`);
-    setCurrentStep(3); // Move to minting step
+    setNftName(`Artwork - ${new Date(image.timestamp).toLocaleDateString()}`);
+    setNftDescription(`Unique artwork created with the prompt: "${image.prompt.substring(0, 100)}${image.prompt.length > 100 ? '...' : ''}"`);
+    setCurrentStep(3);
   };
 
   const addProgressStep = (step, status = 'processing') => {
@@ -198,8 +152,6 @@ const CreatePage = () => {
       setMintingProgress([]);
       setMintingStep('Initializing minting process...');
 
-      // STEP 1: Check/Create DID
-      console.log('🔐 STEP 1: Verifying Creator DID...');
       setMintingStep('Step 1/4: Verifying your creator identity');
       addProgressStep('DID Verification', 'processing');
       
@@ -213,13 +165,8 @@ const CreatePage = () => {
       
       updateProgressStep('DID Verification', 'completed', {
         did: userDID.did,
-        topicId: userDID.topicId,
-        message: userDID.topicId ? 'Existing DID found and verified' : 'New DID created successfully'
+        message: userDID.isNew ? 'New DID will be created with mint' : 'Existing DID found and verified'
       });
-      console.log('✅ Creator DID verified:', userDID.did);
-
-      // STEP 2: Finalize Artwork (Content Hash + IPFS Upload)
-      console.log('🎨 STEP 2: Finalizing Artwork...');
       setMintingStep('Step 2/4: Preparing your artwork');
       addProgressStep('Content Hashing', 'processing');
       
@@ -235,14 +182,8 @@ const CreatePage = () => {
             creator: accountId,
             creator_did: userDID.did,
             attributes: [
-              {
-                trait_type: "Creation Date",
-                value: new Date().toISOString()
-              },
-              {
-                trait_type: "Creation Method",
-                value: "Digital Painting"
-              }
+              { trait_type: "Creation Date", value: new Date().toISOString() },
+              { trait_type: "Creation Method", value: "Digital Painting" }
             ]
           }
         );
@@ -260,10 +201,7 @@ const CreatePage = () => {
             ai_prompt: encryptedPrompt,
             ai_model: selectedImage.model || 'Stable Diffusion 2.1',
             attributes: [
-              {
-                trait_type: "Generation Date",
-                value: new Date(selectedImage.timestamp).toISOString()
-              }
+              { trait_type: "Generation Date", value: new Date(selectedImage.timestamp).toISOString() }
             ]
           }
         );
@@ -275,185 +213,74 @@ const CreatePage = () => {
         metadataCID: finalizedArtwork.metadataCID,
         message: 'Content hash computed and uploaded to IPFS'
       });
-      console.log('✅ Artwork finalized');
-      console.log('   🔐 Content Hash:', finalizedArtwork.contentHash);
-      console.log('   🖼️  Image CID:', finalizedArtwork.imageCID);
-      console.log('   📋 Metadata CID:', finalizedArtwork.metadataCID);
 
-      // STEP 3: Create On-Chain Attestation
-      console.log('🔐 STEP 3: Creating On-Chain Attestation...');
-      setMintingStep('Step 3/4: Creating on-chain attestation');
-      addProgressStep('Attestation', 'processing');
-      setMintingStep('⏳ Please sign the attestation transaction in your Blade Wallet');
-      
-      const attestation = await createAttestation(
-        userDID.did,
-        finalizedArtwork.contentHash,
-        {
-          nftName: nftName,
-          nftDescription: nftDescription,
-          creatorAccountId: accountId,
-          imageHash: finalizedArtwork.imageHash,
-          metadataHash: finalizedArtwork.metadataHash,
-          imageCID: finalizedArtwork.imageCID,
-          metadataCID: finalizedArtwork.metadataCID,
-          creationMethod: isPainted ? 'Digital Painting' : 'AI'
-        }
-      );
-      
-      updateProgressStep('Attestation', 'completed', {
-        transactionId: attestation.attestationTx,
-        topicId: attestation.topicId,
-        sequenceNumber: attestation.sequenceNumber,
-        message: 'Immutable attestation recorded on Hedera'
-      });
-      console.log('✅ Attestation created');
-      console.log('   🔗 Transaction ID:', attestation.attestationTx);
-      console.log('   📋 Topic ID:', attestation.topicId);
-      console.log('   🔢 Sequence #:', attestation.sequenceNumber);
+      setMintingStep('Step 3/4: Minting NFT on Solana (please approve in wallet)');
+      addProgressStep('Atomic Mint', 'processing');
 
-      // STEP 4: Mint NFT with Complete Metadata
-      console.log('🎨 STEP 4: Minting NFT...');
-      setMintingStep('Step 4/4: Minting your NFT on Hedera');
-      addProgressStep('NFT Minting', 'processing');
-      
-      const currentWallet = getCurrentWallet();
-      if (!currentWallet) {
+      if (!walletAdapter) {
         throw new Error('Wallet not connected properly');
       }
 
       const nftMetadata = {
         name: nftName,
+        symbol: isPainted ? 'DGTART' : 'AIART',
         description: nftDescription,
         image: finalizedArtwork.imageUrl,
         external_url: finalizedArtwork.metadataUrl,
         creator: accountId,
-        created_at: new Date().toISOString(),
-        
-        // DID Information
         creator_did: userDID.did,
-        did_topic_id: userDID.topicId,
-        did_file_id: userDID.fileId,
-        
-        // Content Hashes
         content_hash: finalizedArtwork.contentHash,
         image_hash: finalizedArtwork.imageHash,
         metadata_hash: finalizedArtwork.metadataHash,
-        
-        // IPFS Information
         image_ipfs_cid: finalizedArtwork.imageCID,
         metadata_ipfs_cid: finalizedArtwork.metadataCID,
-        
-        // Attestation Information
-        attestation_tx: attestation.attestationTx,
-        attestation_topic_id: attestation.topicId,
-        attestation_sequence: attestation.sequenceNumber,
-        attestation_hash: attestation.attestationHash,
-        attestation_timestamp: attestation.timestamp,
-        
-        // Enhanced attributes
         attributes: [
           ...finalizedArtwork.metadata.attributes,
-          {
-            trait_type: 'Creator DID',
-            value: userDID.did
-          },
-          {
-            trait_type: 'Image Hash',
-            value: finalizedArtwork.imageHash
-          },
-          {
-            trait_type: 'Content Hash',
-            value: finalizedArtwork.contentHash
-          },
-          {
-            trait_type: 'Metadata Hash',
-            value: finalizedArtwork.metadataHash
-          },
-          {
-            trait_type: 'Attestation TX',
-            value: convertToStandardTxId(attestation.attestationTx)
-          }
+          { trait_type: 'Creator DID', value: userDID.did },
+          { trait_type: 'Content Hash', value: finalizedArtwork.contentHash },
         ]
       };
 
-      let mintResult;
-      
-      try {
-        console.log('🔄 Using Blade Wallet for NFT minting...');
-        setMintingStep('⏳ Please sign to create NFT collection in your Blade Wallet');
-        
-        const { getBladeWalletSigner, mintNFTWorkflowWithBlade } = await import('../../utils/bladeWalletNFTMinting');
-        
-        const { bladeSigner, accountId: bladeAccountId } = await getBladeWalletSigner();
-        
-        updateProgressStep('NFT Minting', 'processing', {
-          message: 'Creating NFT collection (please sign in wallet)...'
-        });
-        
-        const bladeResult = await mintNFTWorkflowWithBlade(bladeSigner, bladeAccountId, nftMetadata, {
-          collectionName: `${isPainted ? 'Digital Art' : 'AI Art'} Collection ${Date.now()}`,
-          collectionSymbol: isPainted ? 'DGTART' : 'AIART',
-          maxSupply: 1,
-          memo: `ANFT:${finalizedArtwork.contentHash.substring(0, 16)}`
-        }, (status) => {
-          // Progress callback from minting workflow
-          setMintingStep(status);
-        });
-        
-        const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
-        const nftUrl = `https://hashscan.io/${network}/token/${bladeResult.mint.tokenId}`;
-        const attestationUrl = `https://hashscan.io/${network}/topic/${attestation.topicId}`;
-        
-        const successResult = {
-          tokenId: bladeResult.mint.tokenId,
-          serialNumber: bladeResult.mint.serialNumber,
-          transactionId: bladeResult.mint.transactionId,
+      const solanaResult = await mintNFTWorkflow(
+        walletAdapter,
+        nftMetadata,
+        {
+          username: userDID.isNew ? userDID.username : null,
+          existingDID: userDID.isNew ? null : userDID,
           contentHash: finalizedArtwork.contentHash,
-          attestationTx: attestation.attestationTx,
-          attestationTopicId: attestation.topicId,
-          nftUrl: nftUrl,
-          attestationUrl: attestationUrl,
-          creatorDID: userDID.did,
-          imageCID: finalizedArtwork.imageCID,
-          metadataCID: finalizedArtwork.metadataCID,
-          metadata: nftMetadata,
-          success: true,
-          isReal: true,
-          hashscanUrl: bladeResult.hashscanUrl
-        };
-        
-        updateProgressStep('NFT Minting', 'completed', {
-          tokenId: bladeResult.mint.tokenId,
-          serialNumber: bladeResult.mint.serialNumber,
-          transactionId: bladeResult.mint.transactionId,
-          message: 'NFT minted successfully with complete provenance'
-        });
-        
-        setMintResult(successResult);
-        console.log('✅ NFT minted successfully');
-      } catch (mintingError) {
-        console.log('⚠️ Blade Wallet minting failed:', mintingError.message);
-        
-        if (mintingError.message.includes('Blade Wallet not connected')) {
-          throw new Error('Blade Wallet not connected. Please connect your Blade Wallet first.');
-        } else if (mintingError.message.includes('Current wallet is not Blade Wallet')) {
-          throw new Error('Please connect using Blade Wallet to mint NFTs.');
-        } else if (mintingError.message.includes('INSUFFICIENT_ACCOUNT_BALANCE')) {
-          throw new Error('Insufficient HBAR balance in your Blade Wallet. Please add HBAR for transaction fees.');
-        } else if (mintingError.message.includes('User rejected') || mintingError.message.includes('denied')) {
-          throw new Error('Transaction rejected by user in Blade Wallet.');
-        }
-        
-        throw mintingError;
-      }
+          royaltyBps: 500,
+        },
+        (status) => setMintingStep(status)
+      );
 
-      // Show success modal
+      updateProgressStep('Atomic Mint', 'completed', {
+        tokenId: solanaResult.mint.tokenId,
+        transactionId: solanaResult.mint.transactionId,
+        message: 'NFT minted successfully with complete provenance'
+      });
+
+      const successResult = {
+        tokenId: solanaResult.mint.tokenId,
+        serialNumber: 1,
+        transactionId: solanaResult.mint.transactionId,
+        contentHash: finalizedArtwork.contentHash,
+        attestationTx: solanaResult.attestation?.attestationAddress || '',
+        nftUrl: solanaResult.nftUrl,
+        attestationUrl: solanaResult.attestationUrl,
+        creatorDID: userDID.did,
+        imageCID: finalizedArtwork.imageCID,
+        metadataCID: finalizedArtwork.metadataCID,
+        metadata: nftMetadata,
+        success: true,
+        isReal: true,
+        explorerUrl: solanaResult.explorerUrl,
+      };
+
+      setMintResult(successResult);
+
       setIsMinting(false);
       setShowSuccessModal(true);
       setMintingStep('');
-      
-      // Clear form after short delay to show success
       setTimeout(() => {
         setSelectedImage(null);
         setNftName('');
@@ -462,14 +289,14 @@ const CreatePage = () => {
       }, 500);
       
     } catch (err) {
-      console.error('Error minting NFT:', err);
-      
-      if (err.message.includes('Wallet not connected')) {
-        setError('❌ Please connect your wallet first before minting NFTs.');
-      } else if (err.message.includes('Insufficient')) {
-        setError('❌ Insufficient HBAR balance. Please add HBAR to your wallet to pay for transaction fees.');
+      if (err.message.includes('Wallet not connected') || err.message.includes('not found')) {
+        setError('Please connect your Solana wallet first before minting NFTs.');
+      } else if (err.message.includes('Insufficient') || err.message.includes('insufficient')) {
+        setError('Insufficient SOL balance. Please add SOL to your wallet for transaction fees.');
+      } else if (err.message.includes('rejected') || err.message.includes('denied')) {
+        setError('Transaction rejected by user.');
       } else {
-        setError(`❌ Error: ${err.message}`);
+        setError(`Error: ${err.message}`);
       }
     } finally {
       if (!mintResult) {
@@ -486,19 +313,6 @@ const CreatePage = () => {
     setMintingProgress([]);
   };
 
-  // Convert Mirror Node transaction ID format back to standard format
-  const convertToStandardTxId = (mirrorTxId) => {
-    // Convert from: 0.0.4475114-1758668160-250986456
-    // To: 0.0.4475114@1758668160.250986456
-    if (!mirrorTxId || !mirrorTxId.includes('-')) return mirrorTxId;
-    
-    const parts = mirrorTxId.split('-');
-    if (parts.length !== 3) return mirrorTxId;
-    
-    return `${parts[0]}@${parts[1]}.${parts[2]}`;
-  };
-
-  // Step indicator component
   const StepIndicator = () => (
     <div className={styles.stepIndicator}>
       <div className={`${styles.step} ${currentStep >= 1 ? (currentStep === 1 ? 'active' : 'completed') : 'pending'}`}>
@@ -517,7 +331,7 @@ const CreatePage = () => {
   );
 
   if (!isConnected) {
-    return <ConnectWalletPrompt title="Create AI Art NFTs" description="Please connect your Hedera wallet to start creating AI art NFTs." />;
+    return <ConnectWalletPrompt title="Create NFTs" description="Please connect your Solana wallet to start creating authentic NFTs." />;
   }
 
   return (
@@ -525,22 +339,22 @@ const CreatePage = () => {
       <div className={styles.header}>
         <h1 className={styles.title}>
           {isPaintingMode ? (
-            <>🎨 Mint <span className={styles.gradientText}>Digital Painting</span></>
+            <> Mint <span className={styles.gradientText}>Digital Painting</span></>
           ) : (
-            <>Create <span className={styles.gradientText}>AI Art NFTs</span></>
+            <>Create <span className={styles.gradientText}>NFT Artwork</span></>
           )}
         </h1>
         <p className={styles.subtitle}>
           {isPaintingMode ? (
-            <>Your digital painting is ready to be minted as an NFT on Hedera</>
+            <>Your digital painting is ready to be minted as an NFT on Solana</>
           ) : (
-            <>Transform your imagination into unique digital art using AI, then mint as NFTs on Hedera</>
+            <>Transform your imagination into unique digital art using AI, then mint as NFTs on Solana</>
           )}
         </p>
         {isPaintingMode && paintingArtwork && (
           <div className={styles.paintingInfo}>
             <div className={styles.paintingBadge}>
-              🎨 Digital Painting Studio
+              Digital Painting Studio
             </div>
             <p className={styles.paintingDetails}>
               Created: {new Date(paintingArtwork.created).toLocaleString()} • 
@@ -606,7 +420,6 @@ const CreatePage = () => {
               </button>
             </div>
 
-            {/* Prompt Variations */}
             {showVariations && (
               <div className="border-t pt-4">
                 <h3 className="font-medium mb-3">Prompt Variations:</h3>
@@ -624,7 +437,6 @@ const CreatePage = () => {
               </div>
             )}
 
-            {/* Status Messages */}
             {error && (
               <div className={`${styles.statusMessage} ${styles.statusError}`}>
                 <svg className={styles.statusIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -645,7 +457,6 @@ const CreatePage = () => {
           </div>
         </div>
 
-        {/* Generated Images Section */}
         <div className={styles.imageSection}>
           <div className={styles.card}>
             <h2 className={styles.sectionTitle}>Generated Images</h2>
@@ -668,7 +479,7 @@ const CreatePage = () => {
                 >
                   <Image
                     src={image.imageBase64}
-                    alt="Generated AI art"
+                    alt="Generated artwork"
                     width={300}
                     height={300}
                     className={styles.imagePreviewSmall}
@@ -692,7 +503,6 @@ const CreatePage = () => {
         </div>
       </div>
 
-      {/* NFT Minting Section */}
       {selectedImage && (
         <div className={`${styles.card} ${styles.mintingSection}`}>
           <h2 className={styles.sectionTitle}>Mint as NFT</h2>
@@ -745,7 +555,6 @@ const CreatePage = () => {
                 )}
               </button>
 
-              {/* Minting Progress Display */}
               {isMinting && mintingProgress.length > 0 && (
                 <div className={styles.progressContainer}>
                   <div className={styles.progressHeader}>
@@ -821,7 +630,6 @@ const CreatePage = () => {
         </div>
       )}
 
-      {/* Success Modal */}
       {showSuccessModal && mintResult && (
         <div className={styles.successModalOverlay} onClick={closeSuccessModal}>
           <div className={styles.successModal} onClick={(e) => e.stopPropagation()}>
@@ -833,7 +641,7 @@ const CreatePage = () => {
               </div>
               <h2 className={styles.successTitle}>NFT Minted Successfully! 🎉</h2>
               <p className={styles.successSubtitle}>
-                Your artwork is now an authentic, verified NFT on Hedera
+                Your artwork is now an authentic, verified NFT on Solana
               </p>
             </div>
 
@@ -883,10 +691,10 @@ const CreatePage = () => {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                View on HashScan
+                View on Solana Explorer
               </a>
               <Link 
-                href="/my-nfts"
+                href="/profile"
                 className={styles.successButtonSecondary}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">

@@ -1,0 +1,95 @@
+{
+  "version": "0.1.0",
+  "name": "anft_did",
+  "address": "HuvfZBXs4mP3RnJQxcDPL2nbV52dn51S5yQEKaD833op",
+  "metadata": {
+    "name": "anft_did",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "registerDid",
+      "discriminator": [83, 145, 243, 215, 189, 3, 25, 225],
+      "accounts": [
+        { "name": "signer", "writable": true, "signer": true },
+        { "name": "didProfile", "writable": true },
+        { "name": "walletLookup", "writable": true },
+        { "name": "systemProgram" }
+      ],
+      "args": [
+        { "name": "username", "type": "string" }
+      ]
+    },
+    {
+      "name": "transferDid",
+      "discriminator": [206, 165, 176, 242, 32, 53, 30, 141],
+      "accounts": [
+        { "name": "signer", "writable": true, "signer": true },
+        { "name": "didProfile", "writable": true },
+        { "name": "oldWalletLookup", "writable": true },
+        { "name": "newWalletLookup", "writable": true },
+        { "name": "systemProgram" }
+      ],
+      "args": [
+        { "name": "newWallet", "type": "pubkey" }
+      ]
+    },
+    {
+      "name": "incrementAttestationCount",
+      "discriminator": [10, 96, 254, 205, 194, 198, 51, 227],
+      "accounts": [
+        { "name": "signer", "signer": true },
+        { "name": "didProfile", "writable": true }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "didProfile",
+      "discriminator": [2, 38, 120, 136, 193, 220, 40, 180]
+    },
+    {
+      "name": "walletLookup",
+      "discriminator": [40, 86, 160, 5, 120, 182, 237, 254]
+    }
+  ],
+  "types": [
+    {
+      "name": "didProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "pdaAddress", "type": "pubkey" },
+          { "name": "username", "type": "string" },
+          { "name": "did", "type": "string" },
+          { "name": "currentWallet", "type": "pubkey" },
+          { "name": "originalWallet", "type": "pubkey" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "attestationCount", "type": "u64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "walletLookup",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "wallet", "type": "pubkey" },
+          { "name": "pdaAddress", "type": "pubkey" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "UsernameTooShort", "msg": "Username must be at least 3 characters" },
+    { "code": 6001, "name": "UsernameTooLong", "msg": "Username must be at most 32 characters" },
+    { "code": 6002, "name": "UsernameInvalidChars", "msg": "Username must be lowercase alphanumeric and hyphens only" },
+    { "code": 6003, "name": "WalletAlreadyHasDid", "msg": "This wallet already has a registered DID" },
+    { "code": 6004, "name": "Unauthorized", "msg": "Unauthorized: signer is not the current wallet owner" },
+    { "code": 6005, "name": "Overflow", "msg": "Arithmetic overflow" }
+  ]
+}

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,7 @@ export default function CreateSelect() {
             Choose Your <span className={styles.gradientText}>Creation Method</span>
           </h1>
           <p className={styles.subtitle}>
-            Select how you&apos;d like to create your NFT. Both methods provide a seamless path to minting and trading on Hedera.
+            Select how you&apos;d like to create your NFT. Both methods provide a seamless path to minting and trading on Solana.
           </p>
         </div>
 

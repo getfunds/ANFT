@@ -1,13 +1,8 @@
-'use client';
-
-/**
- * NFT Marketplace Page
- * Browse, buy, and sell NFTs with smart contract integration
- */
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '../../context/WalletContext';
+import { useWallet } from '../../hooks/useWalletAdapter';
 import { 
   getMarketplaceListings
 } from '../../utils/marketplaceClient';
@@ -18,7 +13,7 @@ import styles from './page.module.css';
 
 const MarketplacePage = () => {
   const router = useRouter();
-  const { isConnected, accountId } = useWallet();
+  const { isConnected, accountId, walletAdapter } = useWallet();
   const [listings, setListings] = useState([]);
   const [filteredListings, setFilteredListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,9 +30,13 @@ const MarketplacePage = () => {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailListing, setDetailListing] = useState(null);
   
   // Transaction states
   const [isTransacting, setIsTransacting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [bidAmount, setBidAmount] = useState('');
   const [offerAmount, setOfferAmount] = useState('');
   const [offerDuration, setOfferDuration] = useState('86400'); // 24 hours default
@@ -46,24 +45,21 @@ const MarketplacePage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
 
-  // Define applyFiltersAndSort before useEffect to avoid hoisting issues
   const applyFiltersAndSort = useCallback(() => {
     let filtered = [...listings];
     
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(listing => 
+      filtered = filtered.filter(listing =>
         listing.metadata.name.toLowerCase().includes(query) ||
         listing.metadata.description.toLowerCase().includes(query) ||
         listing.seller.toLowerCase().includes(query)
       );
     }
-    
-    // Apply price filter
+
     if (priceFilter !== 'all') {
       filtered = filtered.filter(listing => {
-        const price = parseFloat(listing.priceInHBAR || listing.price);
+        const price = parseFloat(listing.priceInSOL || listing.price);
         switch (priceFilter) {
           case 'low': return price <= 10;
           case 'medium': return price > 10 && price <= 100;
@@ -72,24 +68,20 @@ const MarketplacePage = () => {
         }
       });
     }
-    
-    // Apply type filter
+
     if (typeFilter !== 'all') {
-      filtered = filtered.filter(listing => {
-        // For now, we'll use a simple check based on metadata
-        // You can enhance this based on your NFT categorization
-        return listing.metadata.name.toLowerCase().includes(typeFilter.toLowerCase()) ||
-               listing.metadata.description.toLowerCase().includes(typeFilter.toLowerCase());
-      });
+      filtered = filtered.filter(listing =>
+        listing.metadata.name.toLowerCase().includes(typeFilter.toLowerCase()) ||
+        listing.metadata.description.toLowerCase().includes(typeFilter.toLowerCase())
+      );
     }
-    
-    // Apply sorting
+
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return parseFloat(a.priceInHBAR || a.price) - parseFloat(b.priceInHBAR || b.price);
+          return parseFloat(a.priceInSOL || a.price) - parseFloat(b.priceInSOL || b.price);
         case 'price-high':
-          return parseFloat(b.priceInHBAR || b.price) - parseFloat(a.priceInHBAR || a.price);
+          return parseFloat(b.priceInSOL || b.price) - parseFloat(a.priceInSOL || a.price);
         case 'name':
           return a.metadata.name.localeCompare(b.metadata.name);
         case 'newest':
@@ -97,10 +89,8 @@ const MarketplacePage = () => {
           return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       }
     });
-    
+
     setFilteredListings(filtered);
-    
-    // Reset pagination to first page when filters change
     setCurrentPage(1);
   }, [listings, priceFilter, typeFilter, sortBy, searchQuery]);
 
@@ -116,309 +106,162 @@ const MarketplacePage = () => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      console.log('🏪 Loading marketplace listings...');
-      
-      // Fetch real listings using client-side utility
+
       const listings = await getMarketplaceListings(0, 100);
-      
-      // Process listings to include metadata from NFT contracts
+
       const processedListings = await Promise.all(
         listings.map(async (listing) => {
           try {
-            console.log(`🔍 Fetching metadata for NFT ${listing.tokenAddress}:${listing.tokenId}`);
-            
             let metadata = listing.metadata;
-            
-            // Try to fetch metadata from Mirror Node first (better for HTS NFTs)
+
             if (!metadata) {
               try {
-                console.log(`🌐 Fetching NFT data from Mirror Node for ${listing.tokenAddress}:${listing.tokenId}`);
-                
-                // Fetch NFT data from Mirror Node
-                const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
-                const baseUrl = network === 'mainnet'
-                  ? 'https://mainnet.mirrornode.hedera.com'
-                  : network === 'previewnet'
-                    ? 'https://previewnet.mirrornode.hedera.com'
-                    : 'https://testnet.mirrornode.hedera.com';
-
-                const nftUrl = `${baseUrl}/api/v1/tokens/${listing.tokenAddress}/nfts/${listing.tokenId}`;
-                console.log(`🌐 Fetching from Mirror Node: ${nftUrl}`);
-                
-                const nftResponse = await fetch(nftUrl);
-                if (nftResponse.ok) {
-                  const nftData = await nftResponse.json();
-                  console.log(`📊 Mirror Node NFT data:`, nftData);
-                  
-                  // Process metadata from Mirror Node (same logic as nftUtils.js)
-                  let metadataUrl = null;
-                  
-                  if (nftData.metadata) {
-                    try {
-                      // Try to decode base64 metadata
-                      const decodedMetadata = atob(nftData.metadata);
-                      console.log(`📋 Decoded metadata: ${decodedMetadata}`);
-                      
-                      if (decodedMetadata.includes('ipfs') || decodedMetadata.startsWith('http')) {
-                        metadataUrl = decodedMetadata;
-                        metadata = await getNFTMetadata(metadataUrl);
-                      } else {
-                        // Try parsing as JSON directly
-                        metadata = JSON.parse(decodedMetadata);
-                      }
-                    } catch (decodeError) {
-                      console.warn('Failed to decode metadata:', decodeError);
-                      // If base64 decode fails, try as plain text
-                      if (nftData.metadata.includes('ipfs') || nftData.metadata.startsWith('http')) {
-                        metadataUrl = nftData.metadata;
-                        metadata = await getNFTMetadata(metadataUrl);
-                      }
-                    }
+                const { Connection, PublicKey } = await import('@solana/web3.js');
+                const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+                const mintPubkey = new PublicKey(listing.tokenAddress);
+                const [metadataPDA] = PublicKey.findProgramAddressSync(
+                  [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+                  TOKEN_METADATA_PROGRAM_ID
+                );
+                const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com', 'confirmed');
+                const accountInfo = await connection.getAccountInfo(metadataPDA);
+                if (accountInfo && accountInfo.data) {
+                  const data = accountInfo.data;
+                  let offset = 1 + 32 + 32;
+                  const nameLen = data.readUInt32LE(offset); offset += 4;
+                  offset += nameLen;
+                  const symbolLen = data.readUInt32LE(offset); offset += 4;
+                  offset += symbolLen;
+                  const uriLen = data.readUInt32LE(offset); offset += 4;
+                  const uri = data.slice(offset, offset + uriLen).toString('utf-8').replace(/\0/g, '').trim();
+                  if (uri && (uri.startsWith('http') || uri.startsWith('ipfs'))) {
+                    metadata = await getNFTMetadata(uri);
                   }
-                  
-                  console.log(`✅ Processed metadata from Mirror Node:`, metadata);
-                } else {
-                  console.warn(`Mirror Node API error: ${nftResponse.status}`);
                 }
-                
-              } catch (mirrorError) {
-                console.warn(`Failed to fetch from Mirror Node for ${listing.tokenAddress}:${listing.tokenId}:`, mirrorError);
-              }
+              } catch { /* metadata fetch failed, use fallback */ }
             }
-            
-            // If still no metadata, try fetching from IPFS URL if provided
-            if (!metadata && listing.metadataUrl) {
-              metadata = await getNFTMetadata(listing.metadataUrl);
-            }
-            
-            // Fallback metadata if none found
+
             if (!metadata) {
               metadata = {
-                name: `AI NFT #${listing.tokenId}`,
-                description: 'Unique AI-generated artwork minted on Hedera',
+                name: `NFT #${listing.tokenId}`,
+                description: 'Authentic artwork minted on Solana',
                 image: '/placeholder-nft.png',
                 attributes: [
-                  { trait_type: 'Collection', value: 'AI Generated' },
+                  { trait_type: 'Collection', value: 'ANFT' },
                   { trait_type: 'Token ID', value: listing.tokenId },
-                  { trait_type: 'Network', value: 'Hedera' }
+                  { trait_type: 'Network', value: 'Solana' }
                 ]
               };
             }
-            
-            // Ensure image URL is properly formatted
+
             if (metadata.image && metadata.image.startsWith('ipfs://')) {
-              const ipfsHash = metadata.image.replace('ipfs://', '');
-              // Use Filebase IPFS gateway (or fallback to ipfs.io)
-              metadata.image = `https://ipfs.filebase.io/ipfs/${ipfsHash}`;
+              metadata.image = `https://ipfs.filebase.io/ipfs/${metadata.image.replace('ipfs://', '')}`;
             }
-            
-            console.log(`✅ Processed metadata for listing ${listing.id}:`, metadata);
-            
-            return {
-              ...listing,
-              metadata
-            };
-          } catch (error) {
-            console.warn(`Failed to load metadata for listing ${listing.id}:`, error);
+
+            return { ...listing, metadata };
+          } catch {
             return {
               ...listing,
               metadata: {
-                name: `AI NFT #${listing.tokenId}`,
-                description: 'Unique AI-generated artwork - metadata temporarily unavailable',
+                name: `NFT #${listing.tokenId}`,
+                description: 'Authentic artwork — metadata temporarily unavailable',
                 image: '/placeholder-nft.png',
-                attributes: [
-                  { trait_type: 'Collection', value: 'AI Generated' },
-                  { trait_type: 'Token ID', value: listing.tokenId },
-                  { trait_type: 'Status', value: 'Metadata Loading...' }
-                ]
+                attributes: [{ trait_type: 'Collection', value: 'ANFT' }]
               }
             };
           }
         })
       );
-      
+
       setListings(processedListings);
-      console.log('✅ Loaded marketplace listings:', processedListings.length);
-      
-    } catch (error) {
-      console.error('❌ Error loading marketplace listings:', error);
+    } catch {
       setError('Failed to load marketplace listings. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-
   const handlePurchaseNFT = async (listing) => {
     if (!isConnected) {
       alert('Please connect your wallet first');
       return;
     }
-    
     try {
       setIsTransacting(true);
-      console.log('💰 Purchasing NFT...', listing);
-      
-      // Get wallet signer
-      const { getBladeWalletSigner } = await import('../../utils/bladeWalletNFTMinting');
-      const { bladeSigner } = await getBladeWalletSigner();
-      
-      // Execute HTS-compatible purchase with automatic NFT transfer
-      console.log('🛒 Executing HTS-compatible purchase with automatic NFT transfer...', {
-        listingId: listing.listingId,
-        price: listing.priceInHBAR,
-        tokenAddress: listing.tokenAddress,
-        tokenId: listing.tokenId,
-        seller: listing.seller
-      });
-      
-      // Import the FINAL, CORRECT HTS-compatible purchase utility
-      const { purchaseHTSNFTWithPreApprovedAllowances } = await import('../../utils/marketplaceHTSPurchaseFinal');
-      
-      // Execute purchase using CORRECT APPROACH:
-      // 1. Verify seller has pre-approved marketplace contract
-      // 2. Ensure buyer token association BEFORE payment
-      // 3. Execute marketplace purchase with automatic NFT transfer
-      // 4. Verify NFT transfer completion
-      const result = await purchaseHTSNFTWithPreApprovedAllowances(
-        listing.listingId,
-        bladeSigner,
-        accountId,
-        listing  // Pass the listing data we already have
-      );
-      
-      console.log('✅ NFT purchased successfully with automatic transfer:', result);
-      
+      const { purchaseNFT: purchaseNFTFromMarketplace } = await import('../../utils/marketplace');
+      const result = await purchaseNFTFromMarketplace(listing.listingId, walletAdapter, accountId);
       setShowBuyModal(false);
-      
-      // Handle different result scenarios
-      if (result.success && result.transferSuccess) {
-        // Success - redirect to success page
+      if (result.success) {
         const successUrl = new URL('/purchase-success', window.location.origin);
         successUrl.searchParams.set('name', listing.metadata.name || 'NFT');
         successUrl.searchParams.set('tokenId', listing.tokenAddress);
         successUrl.searchParams.set('serialNumber', listing.tokenId);
-        successUrl.searchParams.set('transactionId', result.paymentTransactionId || result.transferTransactionId);
-        successUrl.searchParams.set('price', listing.priceInHBAR);
-        if (listing.metadata.image) {
-          successUrl.searchParams.set('image', listing.metadata.image);
-        }
-        
+        successUrl.searchParams.set('transactionId', result.transactionId || '');
+        successUrl.searchParams.set('price', listing.priceInSOL);
+        if (listing.metadata.image) successUrl.searchParams.set('image', listing.metadata.image);
         router.push(successUrl.toString());
-      } else if (result.success && result.paymentSuccess) {
-        alert(`⚠️ Payment successful but NFT transfer failed.\n\n${listing.metadata.name}\nPayment: ${result.paymentTransactionId}\n\nIssue: ${result.errorMessage}\n\n🔧 This means the marketplace smart contract has an issue with HTS NFT transfers.\nYour payment was successful - the smart contract logic needs to be fixed.`);
-        await loadMarketplaceListings();
-      } else if (result.associationAttempted && !result.associationSuccess) {
-        alert(`❌ Token association failed.\n\n${result.errorMessage}\n\nYou need to associate with the token before purchasing.\nNo payment was made - please try again.`);
-      } else if (result.errorMessage && result.errorMessage.includes('pre-approved')) {
-        alert(`❌ Seller hasn't pre-approved the marketplace!\n\n${result.errorMessage}\n\n📋 The seller needs to follow the Seller Setup Guide:\n1. Go to "My NFTs"\n2. Click "Approve All NFTs (Alternative)"\n3. Sign the approval transaction\n\nWithout this step, automatic transfers cannot work.`);
       } else {
-        alert(`❌ Purchase failed: ${result.errorMessage}`);
+        alert(`Purchase failed: ${result.message || 'Unknown error'}`);
       }
-      
     } catch (error) {
-      console.error('❌ Error purchasing NFT:', error);
-      alert(`❌ Purchase failed: ${error.message}`);
+      alert(`Purchase failed: ${error.message}`);
     } finally {
       setIsTransacting(false);
     }
   };
 
   const handlePlaceBid = async (listing) => {
-    if (!isConnected) {
-      alert('Please connect your wallet first');
-      return;
-    }
-    
-    if (!bidAmount || parseFloat(bidAmount) <= 0) {
-      alert('Please enter a valid bid amount');
-      return;
-    }
-    
+    if (!isConnected) { alert('Please connect your wallet first'); return; }
+    if (!bidAmount || parseFloat(bidAmount) <= 0) { alert('Please enter a valid bid amount'); return; }
     try {
       setIsTransacting(true);
-      console.log('🎯 Placing bid...', { listing, bidAmount });
-      
-      // Get wallet signer
-      const { getBladeWalletSigner } = await import('../../utils/bladeWalletNFTMinting');
-      const { bladeSigner } = await getBladeWalletSigner();
-      
-      // Import marketplace utility for direct call
-      const { placeBidOnAuction } = await import('../../utils/marketplace');
-      
-      // Execute bid
-      const result = await placeBidOnAuction(
-        listing.listingId,
-        bidAmount,
-        bladeSigner,
-        accountId
-      );
-      
-      console.log('✅ Bid placed successfully:', result);
-      
-      // Update UI
-      alert(`🎯 Successfully placed bid of ${bidAmount} HBAR on ${listing.metadata.name}!`);
+      const { placeBid: placeBidOnAuction } = await import('../../utils/marketplace');
+      await placeBidOnAuction(listing.listingId, bidAmount, walletAdapter, accountId);
+      alert(`Successfully placed bid of ${bidAmount} SOL on ${listing.metadata.name}!`);
       setShowBidModal(false);
       setBidAmount('');
-      
-      // Refresh listings
       await loadMarketplaceListings();
-      
     } catch (error) {
-      console.error('❌ Error placing bid:', error);
-      alert(`❌ Bid failed: ${error.message}`);
+      alert(`Bid failed: ${error.message}`);
     } finally {
       setIsTransacting(false);
     }
   };
 
   const handleMakeOffer = async (listing) => {
-    if (!isConnected) {
-      alert('Please connect your wallet first');
-      return;
-    }
-    
-    if (!offerAmount || parseFloat(offerAmount) <= 0) {
-      alert('Please enter a valid offer amount');
-      return;
-    }
-    
+    if (!isConnected) { alert('Please connect your wallet first'); return; }
+    if (!offerAmount || parseFloat(offerAmount) <= 0) { alert('Please enter a valid offer amount'); return; }
     try {
       setIsTransacting(true);
-      console.log('💡 Making offer...', { listing, offerAmount, offerDuration });
-      
-      // Get wallet signer
-      const { getBladeWalletSigner } = await import('../../utils/bladeWalletNFTMinting');
-      const { bladeSigner } = await getBladeWalletSigner();
-      
-      // Import marketplace utility for direct call
-      const { makeOfferOnListing } = await import('../../utils/marketplace');
-      
-      // Execute offer
-      const result = await makeOfferOnListing(
-        listing.listingId,
-        offerAmount,
-        parseInt(offerDuration),
-        bladeSigner,
-        accountId
+      const { makeOffer: makeOfferOnListing } = await import('../../utils/marketplace');
+      await makeOfferOnListing(
+        { listingId: listing.listingId, amount: offerAmount, duration: parseInt(offerDuration) },
+        walletAdapter, accountId
       );
-      
-      console.log('✅ Offer made successfully:', result);
-      
-      // Update UI
-      alert(`💡 Successfully made offer of ${offerAmount} HBAR on ${listing.metadata.name}!`);
+      alert(`Successfully made offer of ${offerAmount} SOL on ${listing.metadata.name}!`);
       setShowOfferModal(false);
       setOfferAmount('');
-      
-      // Refresh listings
       await loadMarketplaceListings();
-      
     } catch (error) {
-      console.error('❌ Error making offer:', error);
-      alert(`❌ Offer failed: ${error.message}`);
+      alert(`Offer failed: ${error.message}`);
     } finally {
       setIsTransacting(false);
+    }
+  };
+
+  const handleCancelListing = async (listing) => {
+    if (!isConnected) return;
+    try {
+      setIsCancelling(true);
+      const { cancelListing: cancelMarketplaceListing } = await import('../../utils/marketplace');
+      await cancelMarketplaceListing(listing.tokenAddress || listing.listingId, walletAdapter, accountId);
+      setShowCancelModal(false);
+      setSelectedListing(null);
+      setListings(prev => prev.filter(l => l.listingId !== listing.listingId));
+    } catch (error) {
+      alert(`Failed to cancel listing: ${error.message}`);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -439,61 +282,60 @@ const MarketplacePage = () => {
     setOfferAmount('');
   };
 
+  const openCancelModal = (listing) => {
+    setSelectedListing(listing);
+    setShowCancelModal(true);
+  };
+
+  const openDetailModal = (listing) => {
+    setDetailListing(listing);
+    setShowDetailModal(true);
+  };
+
+  const formatAccountId = (addr) => {
+    if (!addr) return '—';
+    return addr.length > 12 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
+  };
+
   const formatTimeRemaining = (expirationTime) => {
     const now = new Date().getTime();
     const expiry = new Date(expirationTime).getTime();
     const timeLeft = expiry - now;
-    
     if (timeLeft <= 0) return 'Expired';
-    
     const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
     const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-    
     if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
   };
 
-  /**
-   * Convert EVM address to Hedera account ID format
-   * EVM: 0x00000000000000000000000000000000004448ea
-   * Hedera: 0.0.4474090
-   */
-  const evmAddressToHederaId = (evmAddress) => {
-    try {
-      // Remove 0x prefix if present
-      const hex = evmAddress.startsWith('0x') ? evmAddress.slice(2) : evmAddress;
-      
-      // Convert last 8 hex characters to decimal
-      const accountNum = parseInt(hex.slice(-8), 16);
-      
-      return `0.0.${accountNum}`;
-    } catch (error) {
-      console.error('Error converting EVM address:', error);
-      return evmAddress; // Return original if conversion fails
-    }
+  const InlineCopy = ({ text }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = async () => {
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch { /* fallback */ }
+    };
+    return (
+      <button onClick={handleCopy} className={styles.detailCopyBtn} title={copied ? 'Copied!' : 'Copy'}>
+        {copied ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        )}
+      </button>
+    );
   };
 
-  const formatAccountId = (accountId) => {
-    // If it looks like an EVM address, convert it first
-    if (accountId.startsWith('0x') || accountId.length > 20) {
-      accountId = evmAddressToHederaId(accountId);
-    }
-    
-    // Format the Hedera account ID
-    if (accountId.includes('.')) {
-      // Already in Hedera format (0.0.xxxxx)
-      return accountId;
-    }
-    
-    return `${accountId.slice(0, 8)}...${accountId.slice(-6)}`;
-  };
-
-  // Pagination
   const totalPages = Math.ceil(filteredListings.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedListings = filteredListings.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedListings = filteredListings.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   if (isLoading) {
     return (
@@ -537,7 +379,7 @@ const MarketplacePage = () => {
           NFT <span className={styles.gradientText}>Marketplace</span>
         </h1>
         <p className={styles.subtitle}>
-          Discover, buy, and sell unique AI-generated NFTs on Hedera
+          Discover, buy, and sell authentic NFTs on Solana
         </p>
       </div>
 
@@ -568,9 +410,9 @@ const MarketplacePage = () => {
                 className={styles.filterSelect}
               >
                 <option value="all">All Prices</option>
-                <option value="low">Under 10 HBAR</option>
-                <option value="medium">10-100 HBAR</option>
-                <option value="high">Over 100 HBAR</option>
+                <option value="low">Under 10 SOL</option>
+                <option value="medium">10-100 SOL</option>
+                <option value="high">Over 100 SOL</option>
               </select>
             </div>
 
@@ -636,7 +478,7 @@ const MarketplacePage = () => {
             <Link href="/create" className={styles.createButton}>
               Create Your First NFT
             </Link>
-            <Link href="/my-nfts" className={styles.sellButton}>
+            <Link href="/profile" className={styles.sellButton}>
               Sell Your NFTs
             </Link>
           </div>
@@ -680,75 +522,72 @@ const MarketplacePage = () => {
               <div className={styles.nftContent}>
                 <h3 className={styles.nftTitle}>{listing.metadata.name}</h3>
                 <p className={styles.nftDescription}>{listing.metadata.description}</p>
-                
-                <div className={styles.nftDetails}>
-                  <div className={styles.detailRow}>
-                    <span>Token ID:</span>
-                    <span className={styles.tokenId}>{listing.tokenId}</span>
+
+                <div className={styles.nftMeta}>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Seller</span>
+                    <span className={styles.metaValue}>{formatAccountId(listing.seller)}</span>
+                  </div>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Mint</span>
+                    <span className={styles.metaValue}>{formatAccountId(listing.tokenAddress)}</span>
+                  </div>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Expires</span>
+                    <span className={styles.metaValue}>{formatTimeRemaining(listing.expirationTime)}</span>
                   </div>
                 </div>
 
-                {/* NFT Attributes */}
-                {listing.metadata.attributes && listing.metadata.attributes.length > 0 && (() => {
-                  // Filter out AI Model and other technical attributes
-                  const displayAttributes = listing.metadata.attributes.filter(attr => 
-                    attr.trait_type !== 'AI Model' && 
-                    attr.trait_type !== 'ai_model'
-                  );
-                  
-                  if (displayAttributes.length === 0) return null;
-                  
-                  return (
-                    <div className={styles.attributesSection}>
-                      <p className={styles.attributesLabel}>Attributes</p>
-                      <div className={styles.attributesContainer}>
-                        {displayAttributes.slice(0, 3).map((attr, index) => (
-                          <span key={`${listing.id}-attr-${index}`} className={styles.attributeBadge}>
+                {listing.metadata.attributes && listing.metadata.attributes.filter(a => a.trait_type !== 'AI Model' && a.trait_type !== 'ai_model').length > 0 && (
+                  <div className={styles.attributesSection}>
+                    <div className={styles.attributesContainer}>
+                      {listing.metadata.attributes
+                        .filter(a => a.trait_type !== 'AI Model' && a.trait_type !== 'ai_model')
+                        .slice(0, 3)
+                        .map((attr, index) => (
+                          <span key={`${listing.listingId}-attr-${index}`} className={styles.attributeBadge}>
                             {attr.trait_type}: {attr.value}
                           </span>
                         ))}
-                        {displayAttributes.length > 3 && (
-                          <span className={styles.attributeBadgeMore}>
-                            +{displayAttributes.length - 3} more
-                          </span>
-                        )}
-                      </div>
+                      {listing.metadata.attributes.filter(a => a.trait_type !== 'AI Model' && a.trait_type !== 'ai_model').length > 3 && (
+                        <span className={styles.attributeBadgeMore}>
+                          +{listing.metadata.attributes.filter(a => a.trait_type !== 'AI Model' && a.trait_type !== 'ai_model').length - 3} more
+                        </span>
+                      )}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
 
-                {/* Price and Actions */}
                 <div className={styles.priceSection}>
                   <div className={styles.priceInfo}>
-                    <span className={styles.priceLabel}>Price:</span>
-                    <span className={styles.price}>{listing.priceInHBAR} HBAR</span>
+                    <span className={styles.priceLabel}>Price</span>
+                    <span className={styles.price}>{listing.priceInSOL} SOL</span>
                   </div>
 
-                  {isConnected && listing.seller !== accountId && (
-                    <div className={styles.nftActions}>
-                      <button
-                        onClick={() => openBuyModal(listing)}
-                        className={styles.buyButton}
-                      >
+                  <div className={styles.nftActions}>
+                    <button onClick={() => openDetailModal(listing)} className={styles.detailsButton}>
+                      Details
+                    </button>
+                    {isConnected && listing.seller !== accountId && (
+                      <button onClick={() => openBuyModal(listing)} className={styles.buyButton}>
                         <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m0 0L15 13M7 13h8m-8 0V9a2 2 0 012-2h6a2 2 0 012 2v4" />
                         </svg>
                         Buy Now
                       </button>
-                    </div>
-                  )}
-
-                  {!isConnected && (
-                    <div className={styles.connectRequired}>
-                      Connect wallet to purchase
-                    </div>
-                  )}
-
-                  {isConnected && listing.seller === accountId && (
-                    <div className={styles.ownListing}>
-                      Your listing
-                    </div>
-                  )}
+                    )}
+                    {!isConnected && (
+                      <span className={styles.connectRequired}>Connect wallet</span>
+                    )}
+                    {isConnected && listing.seller === accountId && (
+                      <button onClick={() => openCancelModal(listing)} className={styles.cancelListingButton}>
+                        <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -778,6 +617,124 @@ const MarketplacePage = () => {
           >
             Next →
           </button>
+        </div>
+      )}
+
+      {/* NFT Detail Modal */}
+      {showDetailModal && detailListing && (
+        <div className={styles.detailOverlay} onClick={(e) => { if (e.target === e.currentTarget) setShowDetailModal(false); }}>
+          <div className={styles.detailPanel}>
+            <button className={styles.detailCloseBtn} onClick={() => setShowDetailModal(false)}>
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className={styles.detailLayout}>
+              <div className={styles.detailImageCol}>
+                <div className={styles.detailImageWrap}>
+                  <Image
+                    src={detailListing.metadata.image}
+                    alt={detailListing.metadata.name}
+                    fill
+                    className={styles.detailImage}
+                  />
+                  <div className={styles.detailImageBadge}>
+                    {detailListing.isAuction ? '🎯 Auction' : '💰 Fixed Price'}
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.detailInfoCol}>
+                <h2 className={styles.detailName}>{detailListing.metadata.name}</h2>
+                {detailListing.metadata.description && (
+                  <p className={styles.detailDesc}>{detailListing.metadata.description}</p>
+                )}
+
+                <div className={styles.detailPriceBanner}>
+                  <div>
+                    <span className={styles.detailPriceLabel}>Current Price</span>
+                    <span className={styles.detailPrice}>{detailListing.priceInSOL} SOL</span>
+                  </div>
+                  <div className={styles.detailExpiry}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {formatTimeRemaining(detailListing.expirationTime)}
+                  </div>
+                </div>
+
+                <div className={styles.detailInfoList}>
+                  <div className={styles.detailInfoRow}>
+                    <span className={styles.detailInfoLabel}>Mint Address</span>
+                    <div className={styles.detailInfoValueRow}>
+                      <span className={styles.detailInfoValue}>{detailListing.tokenAddress}</span>
+                      <InlineCopy text={detailListing.tokenAddress} />
+                    </div>
+                  </div>
+                  <div className={styles.detailInfoRow}>
+                    <span className={styles.detailInfoLabel}>Seller</span>
+                    <div className={styles.detailInfoValueRow}>
+                      <span className={styles.detailInfoValue}>{detailListing.seller}</span>
+                      <InlineCopy text={detailListing.seller} />
+                    </div>
+                  </div>
+                  {detailListing.metadata?.creator_did && (
+                    <div className={styles.detailInfoRow}>
+                      <span className={styles.detailInfoLabel}>Creator DID</span>
+                      <div className={styles.detailInfoValueRow}>
+                        <span className={styles.detailInfoValue}>{detailListing.metadata.creator_did}</span>
+                        <InlineCopy text={detailListing.metadata.creator_did} />
+                      </div>
+                    </div>
+                  )}
+                  {detailListing.metadata?.creator && (
+                    <div className={styles.detailInfoRow}>
+                      <span className={styles.detailInfoLabel}>Creator</span>
+                      <div className={styles.detailInfoValueRow}>
+                        <span className={styles.detailInfoValue}>{detailListing.metadata.creator}</span>
+                        <InlineCopy text={detailListing.metadata.creator} />
+                      </div>
+                    </div>
+                  )}
+                  {detailListing.metadata?.content_hash && (
+                    <div className={styles.detailInfoRow}>
+                      <span className={styles.detailInfoLabel}>Content Hash</span>
+                      <div className={styles.detailInfoValueRow}>
+                        <span className={styles.detailInfoValue}>{detailListing.metadata.content_hash}</span>
+                        <InlineCopy text={detailListing.metadata.content_hash} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.detailActions}>
+                  {isConnected && detailListing.seller !== accountId && (
+                    <button
+                      onClick={() => { setShowDetailModal(false); openBuyModal(detailListing); }}
+                      className={styles.detailBuyBtn}
+                    >
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m0 0L15 13M7 13h8m-8 0V9a2 2 0 012-2h6a2 2 0 012 2v4" />
+                      </svg>
+                      Buy for {detailListing.priceInSOL} SOL
+                    </button>
+                  )}
+                  {isConnected && detailListing.seller === accountId && (
+                    <button
+                      onClick={() => { setShowDetailModal(false); openCancelModal(detailListing); }}
+                      className={styles.detailCancelBtn}
+                    >
+                      Cancel Listing
+                    </button>
+                  )}
+                  {!isConnected && (
+                    <p className={styles.detailConnectNote}>Connect your wallet to purchase this NFT</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -811,7 +768,7 @@ const MarketplacePage = () => {
                   <p className={styles.modalNftDescription}>{selectedListing.metadata.description}</p>
                   <div className={styles.modalPriceInfo}>
                     <span className={styles.modalPriceLabel}>Price:</span>
-                    <span className={styles.modalPrice}>{selectedListing.priceInHBAR} HBAR</span>
+                    <span className={styles.modalPrice}>{selectedListing.priceInSOL} SOL</span>
                   </div>
                 </div>
               </div>
@@ -838,7 +795,7 @@ const MarketplacePage = () => {
                       <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m0 0L15 13M7 13h8m-8 0V9a2 2 0 012-2h6a2 2 0 012 2v4" />
                       </svg>
-                      Buy for {selectedListing.priceInHBAR} HBAR
+                      Buy for {selectedListing.priceInSOL} SOL
                     </>
                   )}
                 </button>
@@ -868,16 +825,16 @@ const MarketplacePage = () => {
               <div className={styles.bidInfo}>
                 <h3 className={styles.modalNftTitle}>{selectedListing.metadata.name}</h3>
                 <div className={styles.currentBidInfo}>
-                  <span>Current Highest Bid: {selectedListing.highestBidInHBAR || selectedListing.priceInHBAR} HBAR</span>
+                  <span>Current Highest Bid: {selectedListing.highestBidInSOL || selectedListing.priceInSOL} SOL</span>
                 </div>
               </div>
               
               <div className={styles.bidInput}>
-                <label className={styles.inputLabel}>Your Bid (HBAR):</label>
+                <label className={styles.inputLabel}>Your Bid (SOL):</label>
                 <input
                   type="number"
                   step="0.01"
-                  min={parseFloat(selectedListing.highestBidInHBAR || selectedListing.priceInHBAR) + 0.01}
+                  min={parseFloat(selectedListing.highestBidInSOL || selectedListing.priceInSOL) + 0.01}
                   value={bidAmount}
                   onChange={(e) => setBidAmount(e.target.value)}
                   placeholder="Enter bid amount"
@@ -937,13 +894,13 @@ const MarketplacePage = () => {
               <div className={styles.offerInfo}>
                 <h3 className={styles.modalNftTitle}>{selectedListing.metadata.name}</h3>
                 <div className={styles.listingPriceInfo}>
-                  <span>Listed Price: {selectedListing.priceInHBAR} HBAR</span>
+                  <span>Listed Price: {selectedListing.priceInSOL} SOL</span>
                 </div>
               </div>
               
               <div className={styles.offerInputs}>
                 <div className={styles.inputGroup}>
-                  <label className={styles.inputLabel}>Offer Amount (HBAR):</label>
+                  <label className={styles.inputLabel}>Offer Amount (SOL):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -997,6 +954,81 @@ const MarketplacePage = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                       </svg>
                       Make Offer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Listing Confirmation Modal */}
+      {showCancelModal && selectedListing && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>Cancel Listing</h2>
+              <button
+                onClick={() => { setShowCancelModal(false); setSelectedListing(null); }}
+                className={styles.closeButton}
+              >
+                <svg className={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className={styles.modalBody}>
+              <div className={styles.cancelWarning}>
+                <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <h3>Are you sure you want to cancel this listing?</h3>
+                <p>The NFT will be returned to your wallet and removed from the marketplace.</p>
+              </div>
+
+              <div className={styles.purchasePreview}>
+                <Image
+                  src={selectedListing.metadata.image}
+                  alt={selectedListing.metadata.name}
+                  width={200}
+                  height={200}
+                  className={styles.modalNftImage}
+                />
+                <div className={styles.purchaseDetails}>
+                  <h3 className={styles.modalNftTitle}>{selectedListing.metadata.name}</h3>
+                  <div className={styles.modalPriceInfo}>
+                    <span className={styles.modalPriceLabel}>Listed for:</span>
+                    <span className={styles.modalPrice}>{selectedListing.priceInSOL} SOL</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className={styles.modalActions}>
+                <button
+                  onClick={() => { setShowCancelModal(false); setSelectedListing(null); }}
+                  className={styles.cancelButton}
+                  disabled={isCancelling}
+                >
+                  Keep Listing
+                </button>
+                <button
+                  onClick={() => handleCancelListing(selectedListing)}
+                  disabled={isCancelling}
+                  className={styles.destructiveButton}
+                >
+                  {isCancelling ? (
+                    <>
+                      <div className={styles.loadingSpinner}></div>
+                      Cancelling...
+                    </>
+                  ) : (
+                    <>
+                      <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Listing
                     </>
                   )}
                 </button>

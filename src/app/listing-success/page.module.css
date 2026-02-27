@@ -4,19 +4,19 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: #f8f9fa;
+  background: var(--gradient-subtle);
 }
 
 .successCard {
   background: white;
-  border-radius: 1.5rem;
+  border-radius: var(--radius-xl);
   padding: 3rem 2.5rem;
   max-width: 36rem;
   width: 100%;
   text-align: center;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05),
-              0 10px 15px rgba(0, 0, 0, 0.05);
-  animation: slideUp 0.5s ease-out;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--neutral-200);
+  animation: modalSlideUp 0.4s var(--ease) both;
 }
 
 @keyframes slideUp {
@@ -100,24 +100,24 @@
 /* Text Content */
 .title {
   font-size: 2rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-weight: 800;
+  color: var(--neutral-900);
   margin: 0 0 1rem;
   letter-spacing: -0.025em;
 }
 
 .description {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--neutral-500);
   margin: 0 0 2rem;
   line-height: 1.6;
 }
 
 /* NFT Preview */
 .nftPreview {
-  background: #f8f9fa;
-  border: 2px solid #e5e7eb;
-  border-radius: 1rem;
+  background: var(--neutral-50);
+  border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 2rem;
   text-align: left;
@@ -144,7 +144,7 @@
 .nftName {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--neutral-900);
 }
 
 .nftPrice,
@@ -167,7 +167,7 @@
 .priceValue {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #10b981;
+  color: var(--brand-600);
 }
 
 .tokenValue {
@@ -209,39 +209,39 @@
 .primaryButton {
   width: 100%;
   padding: 1rem 1.5rem;
-  background: #10b981;
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s var(--ease);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
   text-decoration: none;
 }
 
 .primaryButton:hover {
-  background: #059669;
+  filter: brightness(1.08);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 6px 16px rgba(13, 148, 136, 0.35);
 }
 
 .secondaryButton {
   width: 100%;
   padding: 1rem 1.5rem;
   background: white;
-  color: #374151;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.75rem;
+  color: var(--neutral-700);
+  border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s var(--ease);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -250,10 +250,10 @@
 }
 
 .secondaryButton:hover {
-  border-color: #10b981;
-  color: #10b981;
+  border-color: var(--brand-500);
+  color: var(--brand-600);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.1);
 }
 
 .linkButton {

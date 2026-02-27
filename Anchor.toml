@@ -1,0 +1,21 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.mainnet]
+anft_did = "HuvfZBXs4mP3RnJQxcDPL2nbV52dn51S5yQEKaD833op"
+anft_marketplace = "8fpA4QsK2kwNd9JxqXd2S23FsspmFiKStmKYNBzGE8bK"
+
+[programs.devnet]
+anft_did = "HuvfZBXs4mP3RnJQxcDPL2nbV52dn51S5yQEKaD833op"
+anft_marketplace = "8fpA4QsK2kwNd9JxqXd2S23FsspmFiKStmKYNBzGE8bK"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

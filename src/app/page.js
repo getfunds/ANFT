@@ -26,7 +26,7 @@ export default function Home() {
         <div className={styles.heroContent}>
           <div className={styles.heroLabel}>
             <span className={styles.labelDot}></span>
-            <span>Authentic NFTs on Hedera Network</span>
+            <span>Authentic NFTs on Solana Network</span>
           </div>
           
           <h1 className={styles.heroTitle}>
@@ -62,7 +62,7 @@ export default function Home() {
             <div className={styles.statDivider}></div>
             <div className={styles.stat}>
               <div className={styles.statNumber}>Fast</div>
-              <div className={styles.statLabel}>On Hedera</div>
+              <div className={styles.statLabel}>On Solana</div>
             </div>
             <div className={styles.statDivider}></div>
             <div className={styles.stat}>
@@ -95,7 +95,7 @@ export default function Home() {
             <div className={styles.pillarNumber}>01</div>
             <h3 className={styles.pillarTitle}>Decentralized Identity</h3>
             <p className={styles.pillarDescription}>
-              Every creator gets a unique DID on Hedera, creating an immutable link 
+              Every creator gets a unique DID on Solana, creating an immutable link 
               between you and your creations that no one can fake or steal.
             </p>
             <div className={styles.pillarFeatures}>
@@ -163,7 +163,7 @@ export default function Home() {
             <div className={styles.pillarNumber}>03</div>
             <h3 className={styles.pillarTitle}>On-Chain Attestation</h3>
             <p className={styles.pillarDescription}>
-              A permanent, timestamped record on Hedera proves exactly when you 
+              A permanent, timestamped record on Solana proves exactly when you 
               created your artwork and links it to your identity forever.
             </p>
             <div className={styles.pillarFeatures}>
@@ -300,7 +300,7 @@ export default function Home() {
             <div className={styles.stepDetails}>
               <h3 className={styles.stepHeading}>Create Your Artwork</h3>
               <p className={styles.stepText}>
-                Generate unique AI art from your imagination or paint original masterpieces 
+                Generate artwork from your imagination or paint original masterpieces 
                 with our advanced digital studio. Iterate until perfect.
               </p>
             </div>
@@ -315,7 +315,7 @@ export default function Home() {
               <h3 className={styles.stepHeading}>Verify & Mint</h3>
               <p className={styles.stepText}>
                 Connect your wallet to establish your DID, generate content hash, 
-                create attestation, and mint your NFT on Hedera&apos;s secure network.
+                create attestation, and mint your NFT on Solana&apos;s secure network.
               </p>
             </div>
           </div>
@@ -348,7 +348,7 @@ export default function Home() {
           <div className={styles.featureBox}>
             <div className={styles.featureIconBox}>⚡</div>
             <h4 className={styles.featureHeading}>Lightning Fast</h4>
-            <p className={styles.featureText}>Powered by Hedera&apos;s high-performance network with instant finality</p>
+            <p className={styles.featureText}>Powered by Solana&apos;s high-performance network with sub-second finality</p>
           </div>
           <div className={styles.featureBox}>
             <div className={styles.featureIconBox}>🔒</div>

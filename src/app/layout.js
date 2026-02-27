@@ -1,8 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "../components/Navbar";
-import WalletModal from "../components/WalletModal";
-import { WalletProvider } from "../context/WalletContext";
+import WalletAdapterProvider from "../components/WalletAdapterProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -10,24 +9,23 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "AI Art NFT Marketplace - Hedera",
-  description: "Create, mint, and trade AI-generated NFTs on the Hedera network",
-  keywords: "NFT, AI Art, Hedera, Blockchain, Digital Art, Marketplace",
+  title: "ANFT — Authentic Art NFT Marketplace",
+  description: "Create, mint, and trade authentic NFTs with verified provenance on Solana",
+  keywords: "NFT, Authentic Art, Solana, Blockchain, Digital Art, Marketplace, DID, Provenance",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${inter.variable}`}>
-        <WalletProvider>
+        <WalletAdapterProvider>
           <div className="layout-container">
             <Navbar />
             <main className="main-content">
               {children}
             </main>
           </div>
-          <WalletModal />
-        </WalletProvider>
+        </WalletAdapterProvider>
       </body>
     </html>
   );

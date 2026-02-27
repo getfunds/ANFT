@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useWallet } from '../context/WalletContext';
-import { WALLET_TYPES } from '../utils/hashconnect';
+import { useWallet, WALLET_TYPES } from '../context/WalletContext';
 import styles from './WalletModal.module.css';
 
 const WalletModal = () => {
@@ -16,23 +15,17 @@ const WalletModal = () => {
   // Lock body scroll when modal is open
   useEffect(() => {
     if (showWalletModal) {
-      // Save current scroll position
       const scrollY = window.scrollY;
-      
-      // Lock body scroll
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       
       return () => {
-        // Restore body scroll
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.width = '';
         document.body.style.overflow = '';
-        
-        // Restore scroll position
         window.scrollTo(0, scrollY);
       };
     }
@@ -40,8 +33,8 @@ const WalletModal = () => {
 
   if (!showWalletModal) return null;
 
-  const handleWalletSelect = async () => {
-    await connect(WALLET_TYPES.BLADE);
+  const handleWalletSelect = async (walletType) => {
+    await connect(walletType);
   };
 
   const handleClose = () => {
@@ -69,7 +62,7 @@ const WalletModal = () => {
             </div>
             <div>
               <h2 className={styles.title}>Connect Your Wallet</h2>
-              <p className={styles.subtitle}>Choose Blade Wallet to get started</p>
+              <p className={styles.subtitle}>Choose a Solana wallet to get started</p>
             </div>
           </div>
           <button 
@@ -86,32 +79,32 @@ const WalletModal = () => {
 
         {/* Content */}
         <div className={styles.content}>
-          {/* Blade Wallet Card */}
+          {/* Phantom Wallet Card */}
           <div className={styles.walletCard}>
             <div className={styles.walletCardHeader}>
               <div className={styles.walletIconLarge}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#blade-gradient)" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#phantom-gradient)" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
                   <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <defs>
-                    <linearGradient id="blade-gradient" x1="2" y1="2" x2="22" y2="12" gradientUnits="userSpaceOnUse">
-                      <stop stopColor="#8B5CF6"/>
+                    <linearGradient id="phantom-gradient" x1="2" y1="2" x2="22" y2="12" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#AB9FF2"/>
                       <stop offset="1" stopColor="#6366F1"/>
                     </linearGradient>
                   </defs>
                 </svg>
               </div>
               <div className={styles.walletInfo}>
-                <h3 className={styles.walletName}>Blade Wallet</h3>
+                <h3 className={styles.walletName}>Phantom</h3>
                 <p className={styles.walletDescription}>
-                  Secure multi-chain wallet with full Hedera support
+                  The most popular Solana wallet
                 </p>
               </div>
             </div>
 
             <button
-              onClick={handleWalletSelect}
+              onClick={() => handleWalletSelect(WALLET_TYPES.PHANTOM)}
               disabled={isLoading}
               className={styles.connectWalletButton}
             >
@@ -122,7 +115,7 @@ const WalletModal = () => {
                 </>
               ) : (
                 <>
-                  <span>Connect Blade Wallet</span>
+                  <span>Connect Phantom</span>
                   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
@@ -153,7 +146,7 @@ const WalletModal = () => {
               </div>
               <div>
                 <h4 className={styles.featureTitle}>Fast Transactions</h4>
-                <p className={styles.featureDescription}>Instant NFT minting & trading</p>
+                <p className={styles.featureDescription}>Sub-second finality on Solana</p>
               </div>
             </div>
 
@@ -178,12 +171,12 @@ const WalletModal = () => {
               </svg>
             </div>
             <div className={styles.helpContent}>
-              <h4 className={styles.helpTitle}>Don&apos;t have Blade Wallet?</h4>
+              <h4 className={styles.helpTitle}>Don&apos;t have Phantom?</h4>
               <p className={styles.helpDescription}>
-                Download the Blade Wallet browser extension to get started with ANFT
+                Download the Phantom browser extension to get started with ANFT on Solana
               </p>
               <a 
-                href="https://bladewallet.io/" 
+                href="https://phantom.app/" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className={styles.downloadLink}
@@ -191,7 +184,7 @@ const WalletModal = () => {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                <span>Download Blade Wallet</span>
+                <span>Download Phantom</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>

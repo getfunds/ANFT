@@ -147,7 +147,7 @@ export async function finalizeArtwork(imageBuffer, metadata, options = {}) {
  * @returns {Promise<Object>} Finalized artwork
  */
 export async function finalizeAIArtwork(imageBlob, prompt, metadata) {
-  console.log('🤖 Finalizing AI-generated artwork...');
+  console.log('🤖 Finalizing generated artwork...');
   
   const enhancedMetadata = {
     ...metadata,

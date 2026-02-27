@@ -1,26 +1,20 @@
-/**
- * Digital Painting Page
- * Main page for the digital painting studio
- */
-
 'use client';
 
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import DigitalPaintingStudioModern from '../../components/DigitalPaintingStudioModern';
 import ListNFTModal from '../../components/ListNFTModal';
-import { useWallet } from '../../context/WalletContext';
+import { useWallet } from '../../hooks/useWalletAdapter';
 import { useDID } from '../../hooks/useDID';
 import DIDRegistrationModal from '../../components/DIDRegistrationModal';
 import { finalizeArtwork } from '../../utils/artworkFinalization';
-import { createAttestation } from '../../utils/attestation';
+import { mintNFTWorkflow } from '../../utils/solanaNFTMinting';
 import styles from './paint.module.css';
 
 const PaintPage = () => {
   const router = useRouter();
-  const { isConnected, accountId } = useWallet();
+  const { isConnected, accountId, walletAdapter } = useWallet();
   
-  // DID Management
   const {
     didInfo,
     showDIDModal,
@@ -28,7 +22,7 @@ const PaintPage = () => {
     ensureDIDBeforeMint,
     completeDIDRegistration,
     cancelDIDRegistration
-  } = useDID(accountId);
+  } = useDID(accountId, walletAdapter);
   
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportedImage, setExportedImage] = useState(null);
@@ -39,46 +33,29 @@ const PaintPage = () => {
   const [nftDescription, setNftDescription] = useState('');
   const [isMinting, setIsMinting] = useState(false);
   
-  // Minting progress tracking
   const [mintingStep, setMintingStep] = useState('');
   const [mintingProgress, setMintingProgress] = useState([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [mintResult, setMintResult] = useState(null);
 
-  // Handle NFT minting from painting studio (directly called from Mint NFT button)
   const handleMintFromStudio = useCallback((imageData) => {
-    console.log('🎨 Mint NFT clicked from studio');
-    
     if (!isConnected) {
       alert('Please connect your wallet first');
       router.push('/wallet');
       return;
     }
-    
-    // Set the exported image data
     setExportedImage({ dataURL: imageData, format: 'png' });
-    
-    // Generate default values
-    const defaultName = `Digital Painting ${new Date().toLocaleDateString()}`;
-    const defaultDescription = 'Original digital artwork created with ANFT Digital Painting Studio';
-    
-    console.log('✅ Opening mint modal with image data');
-    setNftName(defaultName);
-    setNftDescription(defaultDescription);
+    setNftName(`Digital Painting ${new Date().toLocaleDateString()}`);
+    setNftDescription('Original digital artwork created with ANFT Digital Painting Studio');
     setShowMintModal(true);
   }, [isConnected, router]);
 
-  // Handle artwork export from painting studio (for download functionality)
   const handleExport = useCallback((dataURL, format) => {
-    console.log('🎨 Artwork exported:', { format, size: dataURL.length });
     setExportedImage({ dataURL, format });
     setShowExportModal(true);
   }, []);
 
-  // Handle artwork save (for later editing)
   const handleSave = useCallback((paintingData) => {
-    console.log('💾 Artwork saved:', paintingData);
-    // TODO: Implement save to local storage or backend
     localStorage.setItem(`painting_${Date.now()}`, JSON.stringify(paintingData));
   }, []);
 
@@ -100,19 +77,6 @@ const PaintPage = () => {
     setShowMintModal(false);
   };
 
-  // Convert Mirror Node transaction ID format back to standard format
-  const convertToStandardTxId = (mirrorTxId) => {
-    // Convert from: 0.0.4475114-1758668160-250986456
-    // To: 0.0.4475114@1758668160.250986456
-    if (!mirrorTxId || !mirrorTxId.includes('-')) return mirrorTxId;
-    
-    const parts = mirrorTxId.split('-');
-    if (parts.length !== 3) return mirrorTxId;
-    
-    return `${parts[0]}@${parts[1]}.${parts[2]}`;
-  };
-
-  // Actual minting process with DID + Content Hash + Attestation (same as AI NFT)
   const executeMinting = useCallback(async () => {
     if (!exportedImage || !nftName.trim()) {
       alert('Please provide an NFT name');
@@ -124,13 +88,7 @@ const PaintPage = () => {
       setMintingProgress([]);
       setMintingStep('Initializing minting process...');
       
-      console.log('🎨 Starting digital painting NFT minting process...');
-      
-      // ========================================
-      // STEP 1: Verify/Create Creator DID
-      // ========================================
-      console.log('🔐 STEP 1: Verifying Creator DID...');
-      setMintingStep('Step 1/4: Verifying your creator identity');
+      setMintingStep('Step 1/3: Verifying your creator identity');
       addProgressStep('DID Verification', 'processing');
       
       const userDID = await ensureDIDBeforeMint();
@@ -138,25 +96,18 @@ const PaintPage = () => {
       if (!userDID) {
         setIsMinting(false);
         setMintingProgress([]);
-        return; // Modal will show, user will create DID
+        return;
       }
       
       updateProgressStep('DID Verification', 'completed', {
         did: userDID.did,
-        topicId: userDID.topicId,
-        message: userDID.topicId ? 'Existing DID found and verified' : 'New DID created successfully'
+        message: userDID.isNew ? 'New DID will be created with mint' : 'Existing DID found and verified'
       });
-      console.log('✅ Creator DID verified:', userDID.did);
-      
       // Convert data URL to blob
       const response = await fetch(exportedImage.dataURL);
       const blob = await response.blob();
       
-      // ========================================
-      // STEP 2: Finalize Artwork (Content Hash + IPFS Upload)
-      // ========================================
-      console.log('🎨 STEP 2: Finalizing Artwork...');
-      setMintingStep('Step 2/4: Preparing your artwork');
+      setMintingStep('Step 2/3: Preparing your artwork');
       addProgressStep('Content Hashing', 'processing');
       
       const { finalizePaintedArtwork } = await import('../../utils/artworkFinalization');
@@ -169,18 +120,9 @@ const PaintPage = () => {
           creator: accountId,
           creator_did: userDID.did,
           attributes: [
-            {
-              trait_type: "Creation Date",
-              value: new Date().toISOString()
-            },
-            {
-              trait_type: "Creation Method",
-              value: "Digital Painting"
-            },
-            {
-              trait_type: "Studio",
-              value: "ANFT Digital Painting Studio"
-            }
+            { trait_type: "Creation Date", value: new Date().toISOString() },
+            { trait_type: "Creation Method", value: "Digital Painting" },
+            { trait_type: "Studio", value: "ANFT Digital Painting Studio" }
           ]
         }
       );
@@ -191,171 +133,64 @@ const PaintPage = () => {
         metadataCID: finalizedArtwork.metadataCID,
         message: 'Content hash computed and uploaded to IPFS'
       });
-      console.log('✅ Artwork finalized:', {
-        contentHash: finalizedArtwork.contentHash,
-        imageCID: finalizedArtwork.imageCID,
-        metadataCID: finalizedArtwork.metadataCID
-      });
 
-      // ========================================
-      // STEP 3: Create On-Chain Attestation
-      // ========================================
-      console.log('📝 STEP 3: Creating On-Chain Attestation...');
-      setMintingStep('Step 3/4: Creating on-chain attestation');
-      addProgressStep('Attestation', 'processing');
-      setMintingStep('⏳ Please sign the attestation transaction in your Blade Wallet');
-      
-      const { createAttestation } = await import('../../utils/attestation');
-      
-      const attestation = await createAttestation(
-        userDID.did,
-        finalizedArtwork.contentHash,
-        {
-          nftName: nftName,
-          nftDescription: nftDescription,
-          creatorAccountId: accountId,
-          imageHash: finalizedArtwork.imageHash,
-          metadataHash: finalizedArtwork.metadataHash,
-          imageCID: finalizedArtwork.imageCID,
-          metadataCID: finalizedArtwork.metadataCID,
-          creationMethod: 'Digital Painting'
-        }
-      );
-      
-      updateProgressStep('Attestation', 'completed', {
-        transactionId: attestation.attestationTx,
-        topicId: attestation.topicId,
-        sequenceNumber: attestation.sequenceNumber,
-        message: 'Immutable attestation recorded on Hedera'
-      });
-      console.log('✅ Attestation created');
-      console.log('   🔗 Transaction ID:', attestation.attestationTx);
-      console.log('   📋 Topic ID:', attestation.topicId);
-      console.log('   🔢 Sequence #:', attestation.sequenceNumber);
+      setMintingStep('Step 3/3: Minting NFT on Solana (please approve in wallet)');
+      addProgressStep('Atomic Mint', 'processing');
 
-      // ========================================
-      // STEP 4: Mint NFT with Complete Metadata
-      // ========================================
-      console.log('🪙 STEP 4: Minting NFT...');
-      setMintingStep('Step 4/4: Minting your NFT on Hedera');
-      addProgressStep('NFT Minting', 'processing');
-      
-      // Create NFT metadata with DID, content hash, and attestation
+      if (!walletAdapter) {
+        throw new Error('Wallet not connected properly');
+      }
+
       const nftMetadata = {
         name: nftName,
+        symbol: 'DGTART',
         description: nftDescription,
         image: finalizedArtwork.imageUrl,
         external_url: finalizedArtwork.metadataUrl,
         creator: accountId,
-        created_at: new Date().toISOString(),
-        
-        // DID Information
         creator_did: userDID.did,
-        did_topic_id: userDID.topicId,
-        did_file_id: userDID.fileId,
-        
-        // Content Hashes
         content_hash: finalizedArtwork.contentHash,
         image_hash: finalizedArtwork.imageHash,
         metadata_hash: finalizedArtwork.metadataHash,
-        
-        // IPFS Information
         image_ipfs_cid: finalizedArtwork.imageCID,
         metadata_ipfs_cid: finalizedArtwork.metadataCID,
-        
-        // Attestation Information
-        attestation_tx: attestation.attestationTx,
-        attestation_topic_id: attestation.topicId,
-        attestation_sequence: attestation.sequenceNumber,
-        attestation_hash: attestation.attestationHash,
-        attestation_timestamp: attestation.timestamp,
-        
-        // Enhanced attributes
         attributes: [
           ...finalizedArtwork.metadata.attributes,
-          {
-            trait_type: 'Creator DID',
-            value: userDID.did
-          },
-          {
-            trait_type: 'Image Hash',
-            value: finalizedArtwork.imageHash
-          },
-          {
-            trait_type: 'Content Hash',
-            value: finalizedArtwork.contentHash
-          },
-          {
-            trait_type: 'Metadata Hash',
-            value: finalizedArtwork.metadataHash
-          },
-          {
-            trait_type: 'Attestation TX',
-            value: convertToStandardTxId(attestation.attestationTx)
-          }
+          { trait_type: 'Creator DID', value: userDID.did },
+          { trait_type: 'Content Hash', value: finalizedArtwork.contentHash },
         ]
       };
-      
-      // Use Blade Wallet for NFT minting
-      console.log('🔄 Using Blade Wallet for NFT minting...');
-      setMintingStep('⏳ Please sign to create NFT collection in your Blade Wallet');
-      
-      const { getBladeWalletSigner, mintNFTWorkflowWithBlade } = await import('../../utils/bladeWalletNFTMinting');
-      
-      const { bladeSigner, accountId: bladeAccountId } = await getBladeWalletSigner();
-      
-      console.log('✅ Blade Wallet signer obtained:', bladeAccountId);
-      console.log('📤 Starting Blade Wallet NFT minting workflow...');
-      
-      updateProgressStep('NFT Minting', 'processing', {
-        message: 'Creating NFT collection (please sign in wallet)...'
-      });
-      
-      // Mint with Blade Wallet
-      const bladeResult = await mintNFTWorkflowWithBlade(bladeSigner, bladeAccountId, nftMetadata, {
-        collectionName: `Digital Art Collection ${Date.now()}`,
-        collectionSymbol: 'DIGART',
-        maxSupply: 1,
-        memo: `ANFT:${finalizedArtwork.contentHash.substring(0, 16)}`
-      }, (status) => {
-        // Progress callback from minting workflow
-        setMintingStep(status);
-      });
-      
-      const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
-      const nftUrl = `https://hashscan.io/${network}/token/${bladeResult.mint.tokenId}`;
-      const attestationUrl = `https://hashscan.io/${network}/topic/${attestation.topicId}`;
-      
-      updateProgressStep('NFT Minting', 'completed', {
-        tokenId: bladeResult.mint.tokenId,
-        serialNumber: bladeResult.mint.serialNumber,
-        transactionId: bladeResult.mint.transactionId,
+
+      const solanaResult = await mintNFTWorkflow(
+        walletAdapter,
+        nftMetadata,
+        {
+          username: userDID.isNew ? userDID.username : null,
+          existingDID: userDID.isNew ? null : userDID,
+          contentHash: finalizedArtwork.contentHash,
+          imageHash: finalizedArtwork.imageHash,
+          metadataHash: finalizedArtwork.metadataHash,
+          imageCID: finalizedArtwork.imageCID,
+          metadataCID: finalizedArtwork.metadataCID,
+          royaltyBps: 500,
+        },
+        (status) => setMintingStep(status)
+      );
+
+      updateProgressStep('Atomic Mint', 'completed', {
+        tokenId: solanaResult.mint.tokenId,
+        transactionId: solanaResult.mint.transactionId,
         message: 'NFT minted successfully with complete provenance'
       });
       
-      console.log('✅ NFT minted successfully!');
-      console.log('🎉 Complete minting result:', {
-        tokenId: bladeResult.mint.tokenId,
-        serialNumber: bladeResult.mint.serialNumber,
-        did: userDID.did,
-        contentHash: finalizedArtwork.contentHash,
-        imageHash: finalizedArtwork.imageHash,
-        metadataHash: finalizedArtwork.metadataHash,
-        attestation: attestation.attestationTx,
-        attestationTopicId: attestation.topicId,
-        attestationSequence: attestation.sequenceNumber
-      });
-      
-      // Store minted NFT data and show success modal
       const successResult = {
-        tokenId: bladeResult.mint.tokenId,
-        serialNumber: bladeResult.mint.serialNumber,
-        transactionId: bladeResult.mint.transactionId,
+        tokenId: solanaResult.mint.tokenId,
+        serialNumber: 1,
+        transactionId: solanaResult.mint.transactionId,
         contentHash: finalizedArtwork.contentHash,
-        attestationTx: attestation.attestationTx,
-        attestationTopicId: attestation.topicId,
-        nftUrl: nftUrl,
-        attestationUrl: attestationUrl,
+        attestationTx: solanaResult.attestation?.attestationAddress || '',
+        nftUrl: solanaResult.nftUrl,
+        attestationUrl: solanaResult.attestationUrl,
         creatorDID: userDID.did,
         imageCID: finalizedArtwork.imageCID,
         metadataCID: finalizedArtwork.metadataCID,
@@ -363,20 +198,18 @@ const PaintPage = () => {
         description: nftDescription,
         image: finalizedArtwork.imageUrl,
         metadata: nftMetadata,
-        hashscanUrl: bladeResult.hashscanUrl
+        explorerUrl: solanaResult.explorerUrl,
       };
       
       setMintedNFT(successResult);
       setMintResult(successResult);
       
-      // Close mint modal and show success
       setIsMinting(false);
       setShowMintModal(false);
       setShowSuccessModal(true);
       setMintingStep('');
       
     } catch (error) {
-      console.error('❌ Digital painting NFT minting failed:', error);
       alert(`❌ Failed to mint NFT: ${error.message}\n\nPlease try again or check your wallet connection.`);
     } finally {
       if (!mintResult) {
@@ -385,9 +218,8 @@ const PaintPage = () => {
         setMintingProgress([]);
       }
     }
-  }, [exportedImage, accountId, router, nftName, nftDescription, ensureDIDBeforeMint, mintResult]);
+  }, [exportedImage, accountId, walletAdapter, nftName, nftDescription, ensureDIDBeforeMint, mintResult]);
 
-  // Download the artwork
   const handleDownload = useCallback(() => {
     if (!exportedImage) return;
     
@@ -399,55 +231,37 @@ const PaintPage = () => {
     document.body.removeChild(link);
   }, [exportedImage]);
 
-  // Handle marketplace listing
   const handleListForSale = useCallback(async (price, duration) => {
     if (!mintedNFT) return;
     
     try {
-      console.log('🏪 Listing digital painting NFT for sale...', {
-        tokenId: mintedNFT.tokenId,
-        serialNumber: mintedNFT.serialNumber,
-        price,
-        duration
-      });
-      
-      // Use the same marketplace listing system as other NFTs
       const { createMarketplaceListing } = await import('../../utils/marketplace');
-      const { getBladeWalletSigner } = await import('../../utils/bladeWalletNFTMinting');
       
-      // Get wallet signer
-      const { bladeSigner, accountId: bladeAccountId } = await getBladeWalletSigner();
-      
-      // Create marketplace listing
+      // Create marketplace listing using connected wallet
       const listingResult = await createMarketplaceListing({
-        tokenAddress: mintedNFT.tokenId.split('-')[0], // Extract token address
+        tokenAddress: mintedNFT.tokenId,
         tokenId: mintedNFT.serialNumber,
         price: price,
         duration: parseInt(duration),
         isAuction: false,
         royaltyPercentage: 500, // 5% royalty
-        royaltyRecipient: bladeAccountId
-      }, bladeSigner, bladeAccountId);
+        royaltyRecipient: accountId
+      }, walletAdapter, accountId);
       
-      console.log('✅ Marketplace listing successful:', listingResult);
+      alert(`🎉 Digital Painting Listed Successfully!\n\n🎨 ${mintedNFT.name}\n💰 Price: ${price} SOL\n⏰ Duration: ${duration / 86400} days\n\n✅ Your painting is now available in the marketplace!`);
       
-      alert(`🎉 Digital Painting Listed Successfully!\n\n🎨 ${mintedNFT.name}\n💰 Price: ${price} HBAR\n⏰ Duration: ${duration / 86400} days\n\n✅ Your painting is now available in the marketplace!`);
-      
-      // Close listing modal and redirect to marketplace
       setShowListNFTModal(false);
       setTimeout(() => {
         router.push('/marketplace');
       }, 1000);
       
     } catch (error) {
-      console.error('❌ Error listing NFT for sale:', error);
       alert(`❌ Failed to list NFT: ${error.message}\n\nPlease ensure your NFT is approved for the marketplace.`);
     }
   }, [mintedNFT, router]);
 
   return (
     <div className={styles.paintPage}>
-      {/* Painting Studio */}
       <main className={styles.main}>
         <DigitalPaintingStudioModern 
           onMintNFT={handleMintFromStudio}
@@ -455,7 +269,6 @@ const PaintPage = () => {
         />
       </main>
 
-      {/* Export Modal */}
       {showExportModal && exportedImage && (
         <div className={styles.modalOverlay}>
           <div className={styles.exportModal}>
@@ -495,7 +308,7 @@ const PaintPage = () => {
               
               <div className={styles.modalFooter}>
                 <p className={styles.footerText}>
-                  💡 <strong>Tip:</strong> Use the &quot;🎨 Mint NFT&quot; button in the top toolbar to mint your artwork as an NFT on Hedera blockchain!
+                  💡 <strong>Tip:</strong> Use the &quot;🎨 Mint NFT&quot; button in the top toolbar to mint your artwork as an NFT on Solana!
                 </p>
               </div>
             </div>
@@ -503,7 +316,6 @@ const PaintPage = () => {
         </div>
       )}
 
-      {/* Mint NFT Modal (like AI NFT flow) */}
       {showMintModal && exportedImage && (
         <div className={styles.modalOverlay}>
           <div className={styles.mintModal}>
@@ -629,7 +441,7 @@ const PaintPage = () => {
               
               <div className={styles.modalFooter}>
                 <p className={styles.footerText}>
-                  💡 <strong>Note:</strong> Your painting will be uploaded to IPFS and minted as an NFT on Hedera network. This process is permanent and cannot be reversed.
+                  💡 <strong>Note:</strong> Your painting will be uploaded to IPFS and minted as an NFT on Solana. This process is permanent and cannot be reversed.
                 </p>
               </div>
             </div>
@@ -649,7 +461,7 @@ const PaintPage = () => {
               </div>
               <h2 className={styles.successTitle}>Digital Painting Minted! 🎨</h2>
               <p className={styles.successSubtitle}>
-                Your artwork is now an authentic, verified NFT on Hedera
+                Your artwork is now an authentic, verified NFT on Solana
               </p>
             </div>
 
@@ -699,12 +511,12 @@ const PaintPage = () => {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                View on HashScan
+                View on Solana Explorer
               </a>
               <button
                 onClick={() => {
                   closeSuccessModal();
-                  router.push('/my-nfts');
+                  router.push('/profile');
                 }}
                 className={styles.successButtonSecondary}
               >

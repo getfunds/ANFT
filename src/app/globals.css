@@ -199,14 +199,94 @@ a {
   100% { background-position: 0 0; }
 }
 
-/* Keep only essential global animations */
+/* Global loading spinner */
+@keyframes globalSpin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--neutral-200);
+  border-top-color: var(--brand-500);
+  border-radius: 50%;
+  animation: globalSpin 0.7s linear infinite;
+}
+
+/* Page entrance animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Apply smooth entrance to main content areas */
+.main-content {
+  animation: fadeIn 0.35s var(--ease) both;
+}
+
+/* ===== Global Modal Animations ===== */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes modalSlideDown {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(16px) scale(0.98); }
+}
+
+@keyframes checkPop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmerSlide {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ===== Global Toast Notifications ===== */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.95); }
+}
+
+/* ===== Confirmation Step Animations ===== */
+@keyframes stepFadeIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes progressPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+@keyframes successRipple {
+  0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70%  { box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
