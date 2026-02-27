@@ -1,15 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './DIDRegistrationModal.module.css';
 
-/**
- * DID Registration Modal Component (Solana)
- * 
- * Prompts the user for a unique username to register their on-chain DID.
- * Username is validated client-side before submission.
- * The actual register_did instruction is bundled atomically in the mint tx.
- */
 export default function DIDRegistrationModal({ 
   isOpen, 
   onClose, 
@@ -19,45 +12,72 @@ export default function DIDRegistrationModal({
 }) {
   const [username, setUsername] = useState('');
   const [usernameError, setUsernameError] = useState('');
+  const [availabilityStatus, setAvailabilityStatus] = useState(null); // null | 'checking' | 'available' | 'taken' | 'error'
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       setUsername('');
       setUsernameError('');
+      setAvailabilityStatus(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const validateUsername = (value) => {
-    if (!value || value.length < 3) {
-      return 'Username must be at least 3 characters';
-    }
-    if (value.length > 32) {
-      return 'Username must be at most 32 characters';
-    }
-    if (!/^[a-z0-9-]+$/.test(value)) {
-      return 'Only lowercase letters, numbers, and hyphens allowed';
-    }
+  const validateFormat = (value) => {
+    if (!value || value.length < 3) return 'Username must be at least 3 characters';
+    if (value.length > 32) return 'Username must be at most 32 characters';
+    if (!/^[a-z0-9-]+$/.test(value)) return 'Only lowercase letters, numbers, and hyphens allowed';
     return '';
+  };
+
+  const checkAvailability = async (value) => {
+    setAvailabilityStatus('checking');
+    try {
+      const { checkUsernameTaken } = await import('../utils/solanaDID');
+      const taken = await checkUsernameTaken(value);
+      if (taken === null) {
+        setAvailabilityStatus('error');
+      } else if (taken) {
+        setAvailabilityStatus('taken');
+        setUsernameError('This username is already taken');
+      } else {
+        setAvailabilityStatus('available');
+        setUsernameError('');
+      }
+    } catch {
+      setAvailabilityStatus('error');
+    }
   };
 
   const handleUsernameChange = (e) => {
     const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
     setUsername(value);
-    setUsernameError(value ? validateUsername(value) : '');
+    setAvailabilityStatus(null);
+
+    const formatError = value ? validateFormat(value) : '';
+    setUsernameError(formatError);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.length >= 3 && !formatError) {
+      debounceRef.current = setTimeout(() => checkAvailability(value), 500);
+    }
   };
 
   const handleRegister = async () => {
-    const error = validateUsername(username);
-    if (error) {
-      setUsernameError(error);
+    const formatError = validateFormat(username);
+    if (formatError) { setUsernameError(formatError); return; }
+    if (availabilityStatus === 'taken') return;
+    if (availabilityStatus !== 'available') {
+      await checkAvailability(username);
       return;
     }
     await onRegister({ username });
   };
 
-  const isValid = username.length >= 3 && !usernameError;
+  const isValid = username.length >= 3 && !usernameError && availabilityStatus === 'available';
 
   return (
     <div className={styles.modalOverlay} onClick={isRegistering ? undefined : onClose}>
@@ -109,19 +129,56 @@ export default function DIDRegistrationModal({
             <label className={styles.label}>
               Username <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <input
-              type="text"
-              value={username}
-              onChange={handleUsernameChange}
-              placeholder="e.g. alice-art"
-              className={`${styles.input} ${usernameError ? styles.inputError : ''}`}
-              maxLength={32}
-              disabled={isRegistering}
-              autoFocus
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                value={username}
+                onChange={handleUsernameChange}
+                placeholder="e.g. alice-art"
+                className={`${styles.input} ${usernameError ? styles.inputError : availabilityStatus === 'available' ? styles.inputSuccess : ''}`}
+                maxLength={32}
+                disabled={isRegistering}
+                autoFocus
+                style={{ paddingRight: availabilityStatus ? '2.25rem' : undefined }}
+              />
+              {availabilityStatus === 'checking' && (
+                <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}>
+                  <span className={styles.spinner} style={{ width: 16, height: 16, display: 'inline-block' }} />
+                </span>
+              )}
+              {availabilityStatus === 'available' && (
+                <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#22c55e', lineHeight: 1 }}>
+                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+              )}
+              {(availabilityStatus === 'taken') && (
+                <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#ef4444', lineHeight: 1 }}>
+                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </span>
+              )}
+            </div>
+            {availabilityStatus === 'checking' && (
+              <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '4px' }}>
+                Checking availability...
+              </div>
+            )}
+            {availabilityStatus === 'available' && !usernameError && (
+              <div style={{ color: '#22c55e', fontSize: '0.85rem', marginTop: '4px' }}>
+                ✓ Username is available
+              </div>
+            )}
             {usernameError && (
               <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '4px' }}>
                 {usernameError}
+              </div>
+            )}
+            {availabilityStatus === 'error' && !usernameError && (
+              <div style={{ color: '#f59e0b', fontSize: '0.85rem', marginTop: '4px' }}>
+                Could not check availability — will verify on submit
               </div>
             )}
             <div className={styles.charCount}>

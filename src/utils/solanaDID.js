@@ -192,6 +192,25 @@ export async function resolveDID(program, input) {
 }
 
 /**
+ * Check if a username is already taken by fetching its DidProfile PDA.
+ * Returns true if taken, false if available, null on RPC error.
+ * @param {string} username
+ * @returns {Promise<boolean|null>}
+ */
+export async function checkUsernameTaken(username) {
+  try {
+    const { Connection } = await import('@solana/web3.js');
+    const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const [didProfilePDA] = deriveDidProfilePDA(username);
+    const accountInfo = await connection.getAccountInfo(didProfilePDA);
+    return accountInfo !== null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validate a username client-side before submitting
  * @param {string} username
  * @returns {{ valid: boolean, error?: string }}

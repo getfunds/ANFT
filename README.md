@@ -1,5 +1,5 @@
 ﻿## ANFT Pitch Deck
-[View ANFT Pitch Deck](https://drive.google.com/file/d/1xEOJj5Fwd8qS1IaND9keE-mRRWnvu6FK/)
+[View ANFT Pitch Deck](https://drive.google.com/file/d/1O4Fy2GRPTwH5hYKJ2LLgxH7NCEb9MoPv/view)
 
 ---
 

@@ -259,6 +259,16 @@
   box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
 }
 
+.inputError {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.inputSuccess {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
+}
+
 .textarea {
   resize: vertical;
   min-height: 100px;
